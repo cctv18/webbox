@@ -1,0 +1,25 @@
+{
+  "name": "@webbox/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@webbox/plugin-compat": "workspace:*",
+    "@webbox/shared": "workspace:*",
+    "archiver": "^7.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "mime-types": "^2.1.35",
+    "multer": "^2.0.1",
+    "unzipper": "^0.12.3"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.1"
+  }
+}

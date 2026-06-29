@@ -1,0 +1,41 @@
+{
+  "name": "webbox",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "build": "corepack pnpm -r --sort build",
+    "dev": "corepack pnpm --filter @webbox/server dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "corepack pnpm -r --sort lint",
+    "start": "node packages/server/dist/index.js"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/archiver": "^6.0.3",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.23",
+    "@types/mime-types": "^2.1.4",
+    "@types/multer": "^1.4.13",
+    "@types/node": "^24.0.4",
+    "@types/supertest": "^6.0.3",
+    "@types/unzipper": "^0.10.11",
+    "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^26.1.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
+}
