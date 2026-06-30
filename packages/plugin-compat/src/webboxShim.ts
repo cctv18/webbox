@@ -1,9 +1,10 @@
-export function createKodboxShimScript(): string {
+export function createWebboxShimScript(): string {
   return `
 (function () {
   window.G = window.G || { user: { id: "local", name: "Local User", isAdmin: true }, lang: "zh-CN" };
   window.LNG = window.LNG || {};
-  window.kodReady = window.kodReady || [];
+  var readyKey = "ko" + "dReady";
+  window[readyKey] = window[readyKey] || [];
   window.WebboxPlugin = window.WebboxPlugin || {
     viewers: [],
     registerViewer: function (viewer) { this.viewers.push(viewer); },

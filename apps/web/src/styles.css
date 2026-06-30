@@ -689,3 +689,262 @@ button {
     display: none;
   }
 }
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+.file-manager {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tree {
+  min-height: 0;
+  gap: 10px;
+  padding: 14px 10px;
+}
+
+.navigation-tree {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tree-item {
+  width: 100%;
+  display: flex;
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  box-shadow: none;
+}
+
+.tree-label,
+.tree-expander {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tree-expander {
+  width: 18px;
+  min-width: 18px;
+  padding: 0;
+}
+
+.tree-expander:disabled {
+  cursor: default;
+}
+
+.tree-expander .expanded {
+  transform: rotate(90deg);
+}
+
+.tree-label {
+  min-width: 0;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px;
+  text-align: left;
+}
+
+.tree-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-menu {
+  width: 100%;
+}
+
+.bottom-menu .notification-button {
+  width: 36px;
+  min-width: 36px;
+}
+
+.bottom-menu .icon-button:not(.notification-button) {
+  flex: 1;
+}
+
+.workspace {
+  height: 100vh;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.topbar,
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border-bottom: 1px solid #d8e0e4;
+}
+
+.topbar button,
+.toolbar button {
+  min-height: 30px;
+  border-radius: 2px;
+  border: 1px solid #b8c6cf;
+  background: linear-gradient(#ffffff, #edf3f6);
+  box-shadow: 0 1px 0 #ffffff inset, 0 1px 2px rgb(31 45 61 / 14%);
+}
+
+.topbar button:hover,
+.toolbar button:hover {
+  background: #e8f4ff;
+  border-color: #78aeda;
+}
+
+.breadcrumb {
+  flex: 1;
+  max-width: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 34px;
+  padding: 3px;
+}
+
+.breadcrumb button {
+  min-height: 26px;
+  white-space: nowrap;
+}
+
+.breadcrumb-blank {
+  flex: 1;
+  min-width: 40px;
+}
+
+.breadcrumb input,
+.search-box input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font: inherit;
+}
+
+.search-box {
+  width: min(280px, 28vw);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cbd6dc;
+  padding: 6px 8px;
+  background: #f8fafb;
+}
+
+.icon-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.content {
+  min-height: 0;
+  height: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+  overflow: hidden;
+}
+
+.file-surface,
+.inspector-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.file-list {
+  border: 0;
+  border-radius: 0;
+}
+
+.file-row {
+  grid-template-columns: minmax(220px, 1fr) 130px 100px 180px;
+}
+
+.file-row.header button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font-weight: 600;
+}
+
+.file-name-cell,
+.file-name-cell > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-name-input {
+  width: 100%;
+  min-width: 80px;
+  border: 1px solid #6aa6d8;
+  padding: 3px 5px;
+  font: inherit;
+}
+
+.file-grid {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--webbox-icon-size, 72px) + 44px), 1fr));
+}
+
+.file-tile {
+  min-height: calc(var(--webbox-icon-size, 72px) + 56px);
+}
+
+.inspector-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  padding: 0;
+}
+
+.inspector-tabs button {
+  border-radius: 0;
+  border-width: 0 1px 0 0;
+}
+
+.memo-tools {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.activity-tab {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.notification-panel {
+  width: 300px;
+  overflow-x: hidden;
+}
+
+.notification-item {
+  overflow-wrap: anywhere;
+}
+
+.notification-panel button {
+  width: 100%;
+}

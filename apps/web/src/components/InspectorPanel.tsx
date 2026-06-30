@@ -56,18 +56,24 @@ export function InspectorPanel({ path, space }: InspectorPanelProps) {
               <dt>{text.fileManager.accessedTime}</dt><dd>{details?.accessedAt ? new Date(details.accessedAt).toLocaleString() : "-"}</dd>
             </dl>
             <label>
-              {text.inspector.description}
-              <textarea value={properties.description} onChange={(event) => setProperties({ ...properties, description: event.target.value })} />
-            </label>
-            <label>
               {text.inspector.tags}
               <input value={properties.tags.join(",")} onChange={(event) => setProperties({ ...properties, tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} />
+            </label>
+            <label>
+              {text.inspector.description}
+              <textarea value={properties.description} onChange={(event) => setProperties({ ...properties, description: event.target.value })} />
             </label>
             <button type="button" onClick={saveProperties}>{text.inspector.save}</button>
           </div>
         )}
         {tab === "memos" && (
           <div className="memo-tab">
+            <div className="memo-tools">
+              <button type="button">Markdown</button>
+              <button type="button">表情</button>
+              <button type="button">图片</button>
+              <button type="button">附件</button>
+            </div>
             <textarea placeholder={text.inspector.memoPlaceholder} value={memoText} onChange={(event) => setMemoText(event.target.value)} />
             <button type="button" onClick={addMemo}>{text.inspector.addMemo}</button>
             {memos.map((memo) => <article key={memo.id} className="memo-entry">{memo.content}</article>)}
@@ -81,10 +87,10 @@ export function InspectorPanel({ path, space }: InspectorPanelProps) {
           </div>
         )}
       </div>
-      <footer className="inspector-tabs">
-        <button className={tab === "properties" ? "active" : ""} type="button" onClick={() => setTab("properties")}>{text.inspector.properties}</button>
-        <button className={tab === "memos" ? "active" : ""} type="button" onClick={() => setTab("memos")}>{text.inspector.memos}</button>
-        <button className={tab === "activity" ? "active" : ""} type="button" onClick={() => setTab("activity")}>{text.inspector.activity}</button>
+      <footer className="inspector-tabs" role="tablist">
+        <button className={tab === "properties" ? "active" : ""} type="button" role="tab" aria-selected={tab === "properties"} onClick={() => setTab("properties")}>{text.inspector.properties}</button>
+        <button className={tab === "memos" ? "active" : ""} type="button" role="tab" aria-selected={tab === "memos"} onClick={() => setTab("memos")}>{text.inspector.memos}</button>
+        <button className={tab === "activity" ? "active" : ""} type="button" role="tab" aria-selected={tab === "activity"} onClick={() => setTab("activity")}>{text.inspector.activity}</button>
       </footer>
     </aside>
   );

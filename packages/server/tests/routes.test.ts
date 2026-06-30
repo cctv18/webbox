@@ -5,6 +5,10 @@ import request from "supertest";
 import { zhCN } from "@webbox/shared";
 import { createApp } from "../src/app.js";
 
+function collectTreeLabels(nodes: Array<{ label: string; children?: Array<{ label: string; children?: unknown[] }> }>): string[] {
+  return nodes.flatMap((node) => [node.label, ...collectTreeLabels((node.children ?? []) as Array<{ label: string; children?: Array<{ label: string; children?: unknown[] }> }>)]);
+}
+
 describe("server routes", () => {
   let dataRoot: string;
   let storageRoot: string;
@@ -60,12 +64,51 @@ describe("server routes", () => {
     await request(app).post("/api/files/restore").send({ recycleId: recycled.body.data.recycleId }).expect(200);
     const download = await request(app).get("/api/files/download").query({ path: "/hello.txt" }).expect(200);
     expect(download.text).toBe("webbox");
+    expect(download.headers["content-disposition"]).toMatch(/attachment/);
   });
 
-  it("returns kodbox-style tree, storage config, notifications, and safe-box routes", async () => {
+  it("rejects unsafe abstract paths and filenames", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+    await request(app).get("/api/files").query({ path: "/位置/个人空间/../secret" }).expect(400);
+    await request(app).get("/api/files").query({ path: "C:/Windows" }).expect(400);
+    await request(app).get("/api/files").query({ path: "\\\\server\\share" }).expect(400);
+    await request(app).post("/api/files/folder").send({ path: "/位置/个人空间/CON" }).expect(400);
+    await request(app).post("/api/files/rename").send({ path: "/位置/个人空间/a.txt", name: "bad/name.txt" }).expect(400);
+  });
+
+  it("persists explorer settings and returns the requested tree hierarchy without local roots", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+    await request(app).put("/api/settings").send({
+      explorer: { theme: "dark", language: "zh-CN", viewMode: "grid", iconSize: 96, sort: { key: "type", direction: "desc" }, searchHistoryLimit: 8 }
+    }).expect(200);
+    const settings = await request(app).get("/api/settings").expect(200);
+    expect(settings.body.data.explorer.iconSize).toBe(96);
+    expect(settings.body.data.explorer.sort).toEqual({ key: "type", direction: "desc" });
+
+    const tree = await request(app).get("/api/tree").expect(200);
+    expect(tree.body.data.map((node: { label: string }) => node.label)).toEqual(["位置", "工具", "网络挂载"]);
+    expect(JSON.stringify(tree.body.data)).toContain("个人空间");
+    expect(JSON.stringify(tree.body.data)).toContain("新增网络挂载");
+    expect(JSON.stringify(tree.body.data)).not.toMatch(/[A-Z]:\\\\|本地磁盘|local-root/);
+  });
+
+  it("supports template creation, favorites, recent searches, and attachment downloads", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+    await request(app).post("/api/files/template").send({ path: "/位置/个人空间/我的文档/readme.md", type: "md" }).expect(200);
+    await request(app).post("/api/favorites").send({ path: "/位置/个人空间/我的文档", label: "我的文档" }).expect(200);
+    const favorites = await request(app).get("/api/favorites").expect(200);
+    expect(favorites.body.data[0].path).toBe("/位置/个人空间/我的文档");
+    await request(app).post("/api/search/recent").send({ text: "readme", scope: "/位置/个人空间" }).expect(200);
+    const recent = await request(app).get("/api/search/recent").expect(200);
+    expect(recent.body.data[0].text).toBe("readme");
+    const download = await request(app).get("/api/files/download").query({ path: "/位置/个人空间/我的文档/readme.md" }).expect(200);
+    expect(download.headers["content-disposition"]).toMatch(/attachment/);
+  });
+
+  it("returns webbox tree, storage config, notifications, and safe-box routes", async () => {
     const app = await createApp({ storageRoot, dataRoot, pluginRoot });
     const bootstrap = await request(app).get("/api/bootstrap").expect(200);
-    expect(bootstrap.body.data.tree.flatMap((node: { children?: { label: string }[] }) => node.children?.map((child) => child.label) ?? []))
+    expect(collectTreeLabels(bootstrap.body.data.tree))
       .toEqual(expect.arrayContaining(["收藏夹", "个人空间", "最近文档", "我的相册", "我的文档", "我的音乐", "我的视频", "私密保险箱", "回收站"]));
 
     const storage = await request(app).get("/api/admin/storage").expect(200);

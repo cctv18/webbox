@@ -4,7 +4,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import unzipper from "unzipper";
-import { type FileDetails, type FileItem, type RecycleRecord, resolveInsideRoot, toVirtualPath } from "@webbox/shared";
+import { assertSafeFileName, type FileDetails, type FileItem, type RecycleRecord, resolveInsideRoot, toVirtualPath } from "@webbox/shared";
 
 interface RecycleIndexRecord {
   recycleId: string;
@@ -37,6 +37,7 @@ export class FileService {
 
   async mkdir(virtualPath: string): Promise<void> {
     await this.ensureRoot();
+    assertSafeFileName(path.posix.basename(virtualPath));
     await fsp.mkdir(resolveInsideRoot(this.root, virtualPath), { recursive: false });
   }
 
@@ -45,17 +46,16 @@ export class FileService {
   }
 
   async writeBuffer(virtualPath: string, content: Buffer): Promise<void> {
+    assertSafeFileName(path.posix.basename(virtualPath));
     const absolute = resolveInsideRoot(this.root, virtualPath);
     await fsp.mkdir(path.dirname(absolute), { recursive: true });
     await fsp.writeFile(absolute, content);
   }
 
   async rename(virtualPath: string, nextName: string): Promise<void> {
-    if (!nextName || nextName.includes("/") || nextName.includes("\\")) {
-      throw new Error("INVALID_INPUT");
-    }
+    const safeName = assertSafeFileName(nextName);
     const source = resolveInsideRoot(this.root, virtualPath);
-    await fsp.rename(source, path.join(path.dirname(source), nextName));
+    await fsp.rename(source, path.join(path.dirname(source), safeName));
   }
 
   async copy(sourcePath: string, targetPath: string): Promise<void> {

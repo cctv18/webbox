@@ -8,7 +8,7 @@ import { build } from "esbuild";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
 const sourcePluginRoot = path.join(projectRoot, "plugins");
-const sourceAssetRoot = path.join(projectRoot, "assets", "kodbox");
+const sourceAssetRoot = path.join(projectRoot, "assets", "webbox");
 
 const runtimeDependencies = {
   archiver: "^7.0.1",
@@ -26,6 +26,7 @@ const buildLogPath = path.resolve(options.logFile ?? path.join(outDir, "webbox-b
 
 process.env.NO_COLOR = process.env.NO_COLOR || "1";
 process.env.FORCE_COLOR = process.env.FORCE_COLOR || "0";
+process.env.CI = process.env.CI || "1";
 process.stdout.setDefaultEncoding("utf8");
 process.stderr.setDefaultEncoding("utf8");
 
@@ -148,7 +149,7 @@ function copyRecursive(source, target, filter = () => true) {
 }
 
 function copyRuntimeResources() {
-  copyRecursive(sourceAssetRoot, path.join(webOutDir, "webbox-assets", "kodbox"));
+  copyRecursive(sourceAssetRoot, path.join(webOutDir, "webbox-assets"));
   copyRecursive(sourcePluginRoot, path.join(outDir, "plugins"), (candidate) => !candidate.includes(`${path.sep}.git${path.sep}`));
 }
 
@@ -221,29 +222,8 @@ function writeServerConf() {
   fs.writeFileSync(path.join(outDir, "server.conf"), content, "utf8");
 }
 
-function writeTimestampHook() {
-  const content = [
-    "\"use strict\";",
-    "function pad(value, length) { return String(value).padStart(length, \"0\"); }",
-    "function timestamp() {",
-    "  const now = new Date();",
-    "  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1, 2)}-${pad(now.getDate(), 2)}`;",
-    "  const time = `${pad(now.getHours(), 2)}:${pad(now.getMinutes(), 2)}:${pad(now.getSeconds(), 2)}.${pad(now.getMilliseconds(), 3)}`;",
-    "  return `[${date} ${time}]`;",
-    "}",
-    "for (const method of [\"log\", \"info\", \"warn\", \"error\", \"debug\"]) {",
-    "  const original = console[method].bind(console);",
-    "  console[method] = (...args) => original(timestamp(), ...args);",
-    "}",
-    ""
-  ].join("\n");
-  fs.writeFileSync(path.join(outDir, "webbox-log-timestamps.js"), content, "utf8");
-}
-
 function writePowerShellLauncher() {
   const content = String.raw`$ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$OutputEncoding = [Console]::OutputEncoding
 $ScriptPath = $MyInvocation.MyCommand.Path
 $ScriptDir = Split-Path -Parent $ScriptPath
 $ConfigFile = Join-Path $ScriptDir "server.conf"
@@ -333,7 +313,7 @@ if (-not [string]::IsNullOrWhiteSpace($logFileValue)) {
 }
 
 Set-Location $ScriptDir
-$nodeArguments = @("--require", (Join-Path $ScriptDir "webbox-log-timestamps.js"), (Join-Path $ScriptDir "webbox-server.js"))
+$nodeArguments = @((Join-Path $ScriptDir "webbox-server.js"))
 & $nodeCommand.Source @nodeArguments
 exit $LASTEXITCODE
 `;
@@ -430,7 +410,7 @@ function writeShellLauncher() {
     "fi",
     "",
     "cd \"$SCRIPT_DIR\"",
-    "exec node --require \"$SCRIPT_DIR/webbox-log-timestamps.js\" \"$SCRIPT_DIR/webbox-server.js\"",
+    "exec node \"$SCRIPT_DIR/webbox-server.js\"",
     ""
   ].join("\n");
   const launcher = path.join(outDir, "run-webbox.sh");
@@ -445,7 +425,16 @@ async function main() {
   cleanOut();
   if (options.install) {
     const storeDir = process.env.NPM_CONFIG_CACHE ? path.join(process.env.NPM_CONFIG_CACHE, "pnpm-store") : path.join(path.dirname(projectRoot), ".npm-cache", "pnpm-store");
-    runStep("Install dependencies", "corepack", ["pnpm", "-C", projectRoot, "install", "--store-dir", storeDir]);
+    runStep("Install dependencies", "corepack", [
+      "pnpm",
+      "-C",
+      projectRoot,
+      "install",
+      "--frozen-lockfile",
+      "--config.confirmModulesPurge=false",
+      "--store-dir",
+      storeDir
+    ]);
     const electronInstall = path.join(projectRoot, "apps", "electron", "node_modules", "electron", "install.js");
     if (fs.existsSync(electronInstall)) runStep("Install Electron runtime", "node", [electronInstall]);
   }
@@ -456,7 +445,6 @@ async function main() {
   copyRuntimeResources();
   writeRuntimePackage();
   writeServerConf();
-  writeTimestampHook();
   writePowerShellLauncher();
   writeShellLauncher();
   log("Build complete.");

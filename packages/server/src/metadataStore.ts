@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ActivityRecord, MemoEntry, NotificationItem, PathMetadata } from "@webbox/shared";
+import type { ActivityRecord, FavoriteEntry, MemoEntry, NotificationItem, PathMetadata, RecentSearch } from "@webbox/shared";
 
 export interface WebboxMetadata {
   theme: string;
@@ -9,6 +9,8 @@ export interface WebboxMetadata {
   recycle: Record<string, { originalPath: string; deletedAt: string }>;
   plugins: Record<string, boolean>;
   favoritePaths: string[];
+  favorites: FavoriteEntry[];
+  recentSearches: RecentSearch[];
   pathMetadata: Record<string, PathMetadata>;
   memos: MemoEntry[];
   activity: ActivityRecord[];
@@ -26,6 +28,8 @@ const defaultMetadata: WebboxMetadata = {
   recycle: {},
   plugins: {},
   favoritePaths: [],
+  favorites: [],
+  recentSearches: [],
   pathMetadata: {},
   memos: [],
   activity: [],

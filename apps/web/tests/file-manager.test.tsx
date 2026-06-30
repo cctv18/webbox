@@ -39,6 +39,38 @@ describe("Webbox UI", () => {
     expect(screen.queryByText("桌面")).not.toBeInTheDocument();
   });
 
+  it("renders recursive tree roots, two-row toolbar controls, and a type column", async () => {
+    render(<AppShell bootstrap={{
+      ...bootstrap,
+      tree: [
+        { id: "locations", label: "位置", section: "locations", kind: "virtual", path: "/位置", icon: "folder", children: [
+          { id: "favorites", label: "收藏夹", section: "locations", kind: "virtual", path: "/位置/收藏夹", icon: "treeFav" },
+          { id: "personal", label: "个人空间", section: "locations", kind: "directory", path: "/位置/个人空间", icon: "folder" }
+        ] },
+        { id: "tools", label: "工具", section: "tools", kind: "virtual", path: "/工具", icon: "setting", children: [] },
+        { id: "mounts", label: "网络挂载", section: "mounts", kind: "virtual", path: "/网络挂载", icon: "computer", children: [] }
+      ]
+    }} />);
+    expect(await screen.findByRole("treeitem", { name: /位置/ })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: /工具/ })).toBeInTheDocument();
+    expect(screen.getByRole("treeitem", { name: /网络挂载/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "后退" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "前进" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新建文件夹" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传文件夹" })).toBeInTheDocument();
+    expect(screen.getByText("类型")).toBeInTheDocument();
+  });
+
+  it("uses an input search flow instead of a prompt dialog", async () => {
+    const prompt = vi.spyOn(window, "prompt");
+    render(<AppShell bootstrap={bootstrap} />);
+    const search = await screen.findByPlaceholderText("搜索");
+    fireEvent.change(search, { target: { value: "readme" } });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(prompt).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/search/recent"), expect.anything());
+  });
+
   it("opens the compact menu with the retained entries only", async () => {
     render(<AppShell bootstrap={bootstrap} />);
     expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();

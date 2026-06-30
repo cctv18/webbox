@@ -1,22 +1,6 @@
-import os from "node:os";
-import fs from "node:fs";
 import type { AdminStorageConfig, TreeNode } from "@webbox/shared";
 import { zhCN } from "@webbox/shared";
 import type { SafeBoxService } from "./safeBoxService.js";
-
-function localRoots(): TreeNode[] {
-  if (process.platform === "win32") {
-    const roots: TreeNode[] = [];
-    for (let code = 65; code <= 90; code += 1) {
-      const drive = `${String.fromCharCode(code)}:\\`;
-      if (fs.existsSync(drive)) {
-        roots.push({ id: `local-${String.fromCharCode(code)}`, label: drive, section: "mounts", kind: "mount", path: drive, icon: "computer" });
-      }
-    }
-    return roots;
-  }
-  return [{ id: "local-root", label: "/", section: "mounts", kind: "mount", path: "/", icon: "computer" }];
-}
 
 export class WorkspaceService {
   constructor(private readonly storage: AdminStorageConfig, private readonly safeBox: SafeBoxService) {}
@@ -29,11 +13,25 @@ export class WorkspaceService {
         label: zhCN.fileManager.locations,
         section: "locations",
         kind: "virtual",
-        path: "webbox://locations",
+        path: "/位置",
         icon: "folder",
         children: [
-          { id: "favorites", label: zhCN.fileManager.favorites, section: "locations", kind: "virtual", path: "webbox://favorites", icon: "treeFav" },
-          { id: "personal", label: zhCN.fileManager.personalSpace, section: "locations", kind: "directory", path: "/", icon: "folder" }
+          { id: "favorites", label: zhCN.fileManager.favorites, section: "locations", kind: "virtual", path: "/位置/收藏夹", icon: "treeFav" },
+          {
+            id: "personal",
+            label: zhCN.fileManager.personalSpace,
+            section: "locations",
+            kind: "directory",
+            path: "/位置/个人空间",
+            icon: "folder",
+            children: [
+              { id: "personal-safe", label: zhCN.fileManager.safeBox, section: "locations", kind: "directory", path: "/位置/个人空间/私密保险箱", icon: "safe", locked: safe.state !== "unlocked" },
+              { id: "photos", label: zhCN.fileManager.photos, section: "locations", kind: "directory", path: "/位置/个人空间/我的相册", icon: "image" },
+              { id: "documents", label: zhCN.fileManager.documents, section: "locations", kind: "directory", path: "/位置/个人空间/我的文档", icon: "folder" },
+              { id: "music", label: zhCN.fileManager.music, section: "locations", kind: "directory", path: "/位置/个人空间/我的音乐", icon: "music" },
+              { id: "videos", label: zhCN.fileManager.videos, section: "locations", kind: "directory", path: "/位置/个人空间/我的视频", icon: "video" }
+            ]
+          }
         ]
       },
       {
@@ -41,16 +39,12 @@ export class WorkspaceService {
         label: zhCN.fileManager.tools,
         section: "tools",
         kind: "virtual",
-        path: "webbox://tools",
+        path: "/工具",
         icon: "setting",
         children: [
-          { id: "recent", label: zhCN.fileManager.recentDocuments, section: "tools", kind: "virtual", path: "webbox://recent", icon: "search" },
-          { id: "photos", label: zhCN.fileManager.photos, section: "tools", kind: "directory", path: this.storage.photos, icon: "folder" },
-          { id: "documents", label: zhCN.fileManager.documents, section: "tools", kind: "directory", path: this.storage.documents, icon: "folder" },
-          { id: "music", label: zhCN.fileManager.music, section: "tools", kind: "directory", path: this.storage.music, icon: "folder" },
-          { id: "videos", label: zhCN.fileManager.videos, section: "tools", kind: "directory", path: this.storage.videos, icon: "folder" },
-          { id: "safe", label: zhCN.fileManager.safeBox, section: "tools", kind: "directory", path: this.storage.safeBox, icon: "safe", locked: safe.state !== "unlocked" },
-          { id: "recycle", label: zhCN.fileManager.recycleBin, section: "tools", kind: "virtual", path: "webbox://recycle", icon: "recycle" }
+          { id: "recent", label: zhCN.fileManager.recentDocuments, section: "tools", kind: "virtual", path: "/工具/最近文档", icon: "search" },
+          { id: "safe", label: zhCN.fileManager.safeBox, section: "tools", kind: "directory", path: "/工具/私密保险箱", icon: "safe", locked: safe.state !== "unlocked" },
+          { id: "recycle", label: zhCN.fileManager.recycleBin, section: "tools", kind: "virtual", path: "/工具/回收站", icon: "recycle" }
         ]
       },
       {
@@ -58,14 +52,16 @@ export class WorkspaceService {
         label: zhCN.fileManager.mounts,
         section: "mounts",
         kind: "virtual",
-        path: "webbox://mounts",
+        path: "/网络挂载",
         icon: "computer",
-        children: localRoots()
+        children: [
+          { id: "mount-add", label: "新增网络挂载", section: "mounts", kind: "virtual", path: "/网络挂载/新增网络挂载", icon: "computer" }
+        ]
       }
     ];
   }
 
   rootsInfo(): { platform: NodeJS.Platform; hostname: string } {
-    return { platform: process.platform, hostname: os.hostname() };
+    return { platform: process.platform, hostname: "" };
   }
 }

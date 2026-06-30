@@ -1,4 +1,5 @@
-import { Archive, Clock, Folder, HardDrive, Heart, Image, Lock, Music, Recycle, Video } from "lucide-react";
+import { Archive, ChevronRight, Clock, Folder, HardDrive, Heart, Image, Lock, Music, Recycle, Video } from "lucide-react";
+import { useState } from "react";
 import type { TreeNode } from "@webbox/shared";
 
 const iconMap = {
@@ -21,27 +22,49 @@ interface NavigationTreeProps {
 }
 
 export function NavigationTree({ tree, activeId, onSelect }: NavigationTreeProps) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  const renderNode = (node: TreeNode, depth: number) => {
+    const Icon = iconMap[node.icon as keyof typeof iconMap] ?? Folder;
+    const hasChildren = Boolean(node.children?.length);
+    const isCollapsed = Boolean(collapsed[node.id]);
+    return (
+      <div key={node.id} role="none">
+        <div
+          role="treeitem"
+          aria-expanded={hasChildren ? !isCollapsed : undefined}
+          aria-selected={activeId === node.id}
+          className={`tree-item ${activeId === node.id ? "active" : ""}`}
+          style={{ paddingLeft: `${8 + depth * 16}px` }}
+        >
+          <button
+            type="button"
+            className="tree-expander"
+            aria-label={isCollapsed ? `展开${node.label}` : `折叠${node.label}`}
+            onClick={() => hasChildren && setCollapsed((current) => ({ ...current, [node.id]: !current[node.id] }))}
+            disabled={!hasChildren}
+          >
+            {hasChildren && <ChevronRight size={14} className={isCollapsed ? "" : "expanded"} />}
+          </button>
+          <button type="button" className="tree-label" onClick={() => onSelect(node)}>
+            <Icon size={16} />
+            <span>{node.label}</span>
+          </button>
+        </div>
+        {hasChildren && !isCollapsed && (
+          <div role="group">
+            {node.children?.map((child) => renderNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <nav className="navigation-tree">
-      {tree.map((section) => (
-        <section key={section.id} className="tree-section">
-          <h2>{section.label}</h2>
-          {(section.children ?? []).map((node) => {
-            const Icon = iconMap[node.icon as keyof typeof iconMap] ?? Folder;
-            return (
-              <button
-                key={node.id}
-                type="button"
-                className={`tree-item ${activeId === node.id ? "active" : ""}`}
-                onClick={() => onSelect(node)}
-              >
-                <Icon size={16} />
-                <span>{node.label}</span>
-              </button>
-            );
-          })}
-        </section>
-      ))}
+    <nav className="navigation-tree" aria-label="目录树">
+      <div role="tree">
+        {tree.map((node) => renderNode(node, 0))}
+      </div>
     </nav>
   );
 }

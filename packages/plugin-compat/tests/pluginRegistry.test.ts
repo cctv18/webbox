@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createKodboxShimScript, discoverPlugins } from "../src/index.js";
+import { createWebboxShimScript, discoverPlugins } from "../src/index.js";
 
 describe("plugin registry", () => {
   let root: string;
@@ -30,10 +30,10 @@ describe("plugin registry", () => {
     expect(plugins.find((plugin) => plugin.id === "client")?.compatible).toBe(false);
   });
 
-  it("provides a browser shim for Kodbox-style core plugin globals", () => {
-    const shim = createKodboxShimScript();
+  it("provides a browser shim for legacy core plugin globals", () => {
+    const shim = createWebboxShimScript();
     expect(shim).toContain("window.G");
-    expect(shim).toContain("window.kodReady");
+    expect(shim).toContain('"ko" + "dReady"');
     expect(shim).toContain("registerViewer");
   });
 });

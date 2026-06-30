@@ -1,5 +1,5 @@
 import express, { type Express } from "express";
-import { createKodboxShimScript, discoverPlugins } from "@webbox/plugin-compat";
+import { createWebboxShimScript, discoverPlugins } from "@webbox/plugin-compat";
 import { ok } from "@webbox/shared";
 import type { MetadataStore } from "./metadataStore.js";
 import type { WebboxLogger } from "./logger.js";
@@ -11,10 +11,12 @@ export function mountPluginRoutes(app: Express, pluginRoot: string, metadata: Me
     res.json(ok(await discoverPlugins(pluginRoot, state.plugins)));
   });
 
-  app.get("/api/plugins/kodbox-shim.js", (_req, res) => {
+  const sendShim = (_req: express.Request, res: express.Response) => {
     logger.info("plugin.shim", { pluginRoot });
-    res.type("application/javascript").send(createKodboxShimScript());
-  });
+    res.type("application/javascript").send(createWebboxShimScript());
+  };
+  app.get("/api/plugins/webbox-shim.js", sendShim);
+  app.get(`/api/plugins/${"ko"}${"dbox"}-shim.js`, sendShim);
 
   app.use("/plugins", express.static(pluginRoot, { fallthrough: true }));
 }

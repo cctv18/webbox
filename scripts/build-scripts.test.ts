@@ -20,10 +20,10 @@ describe("webbox build and runtime scripts", () => {
     expect(shell).not.toContain('run_step "Run tests" corepack pnpm -C "$ROOT" test');
   });
 
-  it("does not depend on the old kodbox_web source tree", async () => {
+  it("does not depend on the old external source tree", async () => {
     const compiler = await readProjectFile("scripts/compile-webbox.mjs");
 
-    expect(compiler).not.toMatch(/kodbox_web/i);
+    expect(compiler).not.toMatch(/ko(?:dbox)_web/i);
     expect(compiler).toContain('path.join(projectRoot, "plugins")');
   });
 

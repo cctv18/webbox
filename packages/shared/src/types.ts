@@ -3,6 +3,62 @@ export type TreeSection = "locations" | "tools" | "mounts";
 export type NotificationLevel = "info" | "success" | "warning" | "error";
 export type SafeBoxState = "notOpen" | "locked" | "unlocked";
 export type ViewMode = "list" | "grid";
+export type SortKey = "name" | "type" | "size" | "modifiedAt";
+export type SortDirection = "asc" | "desc";
+export type TemplateFileType = "txt" | "md" | "html" | "docx" | "xlsx" | "pptx";
+
+export interface SortState {
+  key: SortKey;
+  direction: SortDirection;
+}
+
+export interface ExplorerPreferences {
+  theme: "light" | "dark" | "system";
+  language: "zh-CN" | "en-US";
+  viewMode: ViewMode;
+  iconSize: number;
+  sort: SortState;
+  searchHistoryLimit: number;
+}
+
+export interface WebboxSettings {
+  explorer: ExplorerPreferences;
+  upload: {
+    chunkSizeMb: number;
+    concurrency: number;
+    ignorePatterns: string[];
+    retryCount: number;
+  };
+  download: {
+    speedLimitKb: number;
+    frontendZip: boolean;
+    backendZipSizeLimitMb: number;
+  };
+}
+
+export interface ResolvedLocation {
+  kind: "space" | "virtual" | "recycle" | "mount";
+  displayPath: string;
+  space?: "personal" | "photos" | "documents" | "music" | "videos" | "safe";
+  filePath?: string;
+  virtualId?: string;
+  mountId?: string;
+}
+
+export interface FavoriteEntry {
+  id: string;
+  path: string;
+  label: string;
+  kind: "file" | "directory" | "virtual";
+  createdAt: string;
+}
+
+export interface RecentSearch {
+  id: string;
+  text: string;
+  scope: string;
+  createdAt: string;
+}
 
 export interface FileItem {
   name: string;

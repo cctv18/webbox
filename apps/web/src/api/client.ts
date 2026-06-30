@@ -12,6 +12,7 @@ import type {
   RecycleRecord,
   SafeBoxStatus,
   TreeNode
+  , WebboxSettings, TemplateFileType, FavoriteEntry, RecentSearch
 } from "@webbox/shared";
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -29,11 +30,14 @@ function withSpace(url: string, space?: string): string {
 
 export const client = {
   bootstrap: () => api<BootstrapData>("/api/bootstrap"),
+  settings: () => api<WebboxSettings>("/api/settings"),
+  saveSettings: (settings: Partial<WebboxSettings>) => api<WebboxSettings>("/api/settings", { method: "PUT", body: JSON.stringify(settings) }),
   plugins: () => api<PluginManifest[]>("/api/plugins"),
   tree: () => api<TreeNode[]>("/api/tree"),
   list: (path: string, space?: string) => api<FileItem[]>(withSpace(`/api/files?path=${encodeURIComponent(path)}`, space)),
   mkdir: (path: string, space?: string) => api<{ path: string }>("/api/files/folder", { method: "POST", body: JSON.stringify({ path, space }) }),
   writeText: (path: string, content: string, space?: string) => api<{ path: string }>("/api/files/text", { method: "POST", body: JSON.stringify({ path, content, space }) }),
+  createTemplate: (path: string, type: TemplateFileType, space?: string) => api<{ path: string; type: TemplateFileType }>("/api/files/template", { method: "POST", body: JSON.stringify({ path, type, space }) }),
   rename: (path: string, name: string, space?: string) => api<{ path: string; name: string }>("/api/files/rename", { method: "POST", body: JSON.stringify({ path, name, space }) }),
   copy: (source: string, target: string, space?: string) => api<{ target: string }>("/api/files/copy", { method: "POST", body: JSON.stringify({ source, target, space }) }),
   move: (source: string, target: string, space?: string) => api<{ target: string }>("/api/files/move", { method: "POST", body: JSON.stringify({ source, target, space }) }),
@@ -50,6 +54,11 @@ export const client = {
     return api<{ name: string }>(withSpace(`/api/files/upload?path=${encodeURIComponent(path)}`, space), { method: "POST", body });
   },
   downloadUrl: (path: string, space?: string) => withSpace(`/api/files/download?path=${encodeURIComponent(path)}`, space),
+  favorites: () => api<FavoriteEntry[]>("/api/favorites"),
+  addFavorite: (path: string, label: string) => api<FavoriteEntry>("/api/favorites", { method: "POST", body: JSON.stringify({ path, label }) }),
+  removeFavorite: (id: string) => api<{ id: string }>(`/api/favorites/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  recentSearches: () => api<RecentSearch[]>("/api/search/recent"),
+  addRecentSearch: (text: string, scope: string) => api<RecentSearch>("/api/search/recent", { method: "POST", body: JSON.stringify({ text, scope }) }),
   safeStatus: () => api<SafeBoxStatus>("/api/safe-box/status"),
   safeOpen: (password: string) => api<SafeBoxStatus>("/api/safe-box/open", { method: "POST", body: JSON.stringify({ password }) }),
   safeLogin: (password: string) => api<SafeBoxStatus>("/api/safe-box/login", { method: "POST", body: JSON.stringify({ password }) }),

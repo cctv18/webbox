@@ -20,7 +20,7 @@ export default function App() {
 
   useEffect(() => {
     const script = document.createElement("script");
-    script.src = "/api/plugins/kodbox-shim.js";
+    script.src = "/api/plugins/webbox-shim.js";
     script.async = true;
     document.head.appendChild(script);
     client.bootstrap().then(setBootstrap).catch((err: Error) => setError(err.message));
