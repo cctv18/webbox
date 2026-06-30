@@ -8,6 +8,7 @@ export interface WebboxConfig {
   dataRoot: string;
   pluginRoot: string;
   webDist: string;
+  configFile?: string;
   logFile?: string;
 }
 
@@ -29,6 +30,7 @@ export function loadConfig(overrides: Partial<WebboxConfig> = {}): WebboxConfig 
     dataRoot,
     pluginRoot: path.resolve(overrides.pluginRoot ?? process.env.WEBBOX_PLUGIN_ROOT ?? path.join(projectRoot, "plugins")),
     webDist: path.resolve(overrides.webDist ?? process.env.WEBBOX_WEB_DIST ?? path.join(projectRoot, "apps", "web", "dist")),
+    configFile: overrides.configFile ?? resolveOptionalPath(process.env.WEBBOX_CONFIG, projectRoot),
     logFile: overrides.logFile ?? resolveOptionalPath(process.env.WEBBOX_LOG_FILE, projectRoot)
   };
 }

@@ -62,6 +62,42 @@ describe("server routes", () => {
     expect(download.text).toBe("webbox");
   });
 
+  it("returns kodbox-style tree, storage config, notifications, and safe-box routes", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+    const bootstrap = await request(app).get("/api/bootstrap").expect(200);
+    expect(bootstrap.body.data.tree.flatMap((node: { children?: { label: string }[] }) => node.children?.map((child) => child.label) ?? []))
+      .toEqual(expect.arrayContaining(["收藏夹", "个人空间", "最近文档", "我的相册", "我的文档", "我的音乐", "我的视频", "私密保险箱", "回收站"]));
+
+    const storage = await request(app).get("/api/admin/storage").expect(200);
+    expect(storage.body.data.personal).toBe(storageRoot);
+
+    expect((await request(app).get("/api/safe-box/status").expect(200)).body.data.state).toBe("notOpen");
+    await request(app).post("/api/safe-box/open").send({ password: "secret" }).expect(200);
+    await request(app).post("/api/safe-box/logout").send({}).expect(200);
+    expect((await request(app).get("/api/safe-box/status").expect(200)).body.data.state).toBe("locked");
+    await request(app).post("/api/safe-box/login").send({ password: "secret" }).expect(200);
+
+    await request(app).post("/api/files/text").send({ path: "/notice.txt", content: "notice" }).expect(200);
+    await request(app).post("/api/files/recycle").send({ path: "/notice.txt" }).expect(200);
+    const notifications = await request(app).get("/api/notifications").expect(200);
+    expect(notifications.body.data[0].message).toContain("notice.txt");
+  });
+
+  it("stores properties, memos, and directory activity", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+    await request(app).post("/api/files/text").send({ path: "/docs/a.txt", content: "a" }).expect(200);
+    await request(app).post("/api/metadata/properties").send({ path: "/docs/a.txt", description: "重要", tags: ["work"] }).expect(200);
+    const properties = await request(app).get("/api/metadata/properties").query({ path: "/docs/a.txt" }).expect(200);
+    expect(properties.body.data.tags).toEqual(["work"]);
+
+    await request(app).post("/api/metadata/memos").send({ path: "/docs", content: "memo **markdown** 😀" }).expect(200);
+    const memos = await request(app).get("/api/metadata/memos").query({ path: "/docs" }).expect(200);
+    expect(memos.body.data[0].content).toContain("markdown");
+
+    const activity = await request(app).get("/api/metadata/activity").query({ path: "/docs" }).expect(200);
+    expect(activity.body.data.some((item: { path: string }) => item.path === "/docs/a.txt")).toBe(true);
+  });
+
   it("does not expose removed share, desktop, user, or history routes", async () => {
     const app = await createApp({ storageRoot, dataRoot, pluginRoot });
     await request(app).get("/api/share").expect(404);

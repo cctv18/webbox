@@ -6,6 +6,9 @@ export type ApiErrorCode =
   | "UNSUPPORTED_OPERATION"
   | "PLUGIN_INCOMPATIBLE"
   | "ARCHIVE_FAILED"
+  | "TARGET_NOT_EMPTY"
+  | "SAFE_BOX_LOCKED"
+  | "AUTH_FAILED"
   | "FILESYSTEM_DENIED";
 
 export type ApiResponse<T> =

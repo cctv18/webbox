@@ -7,6 +7,17 @@ import { build } from "esbuild";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
+function findKodboxWebRoot() {
+  let current = projectRoot;
+  for (let index = 0; index < 5; index += 1) {
+    const candidate = path.join(current, "kodbox_web");
+    if (fs.existsSync(candidate)) return candidate;
+    current = path.dirname(current);
+  }
+  return path.join(path.dirname(projectRoot), "kodbox_web");
+}
+
+const kodboxWebRoot = findKodboxWebRoot();
 const outDir = path.resolve(process.cwd(), "out");
 const webOutDir = path.join(outDir, "web");
 
@@ -54,6 +65,37 @@ function cleanOut() {
   fs.mkdirSync(path.join(outDir, "plugins"), { recursive: true });
 }
 
+function copyRecursive(source, target, filter = () => true) {
+  if (!fs.existsSync(source) || !filter(source)) return;
+  const stat = fs.statSync(source);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const entry of fs.readdirSync(source)) {
+      copyRecursive(path.join(source, entry), path.join(target, entry), filter);
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(source, target);
+}
+
+function copyKodboxResources() {
+  const assetRoot = path.join(webOutDir, "webbox-assets", "kodbox");
+  copyRecursive(path.join(kodboxWebRoot, "static", "images", "file_icon"), path.join(assetRoot, "file_icon"));
+  copyRecursive(path.join(kodboxWebRoot, "static", "images", "common"), path.join(assetRoot, "common"));
+  copyRecursive(path.join(kodboxWebRoot, "static", "style", "lib", "font-icon"), path.join(assetRoot, "font-icon"));
+  copyRecursive(path.join(kodboxWebRoot, "static", "style", "lib", "alifont"), path.join(assetRoot, "alifont"));
+
+  const compatiblePlugins = new Set(["DPlayer", "fileThumb", "htmlEditor", "jPlayer", "officeLive", "officeViewer", "pdfjs", "photoSwipe", "picasa", "webdav", "webodf", "yzOffice"]);
+  const sourcePlugins = path.join(kodboxWebRoot, "plugins");
+  if (fs.existsSync(sourcePlugins)) {
+    for (const entry of fs.readdirSync(sourcePlugins, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !compatiblePlugins.has(entry.name)) continue;
+      copyRecursive(path.join(sourcePlugins, entry.name), path.join(outDir, "plugins", entry.name), (candidate) => !candidate.includes(`${path.sep}.git${path.sep}`));
+    }
+  }
+}
+
 function workspaceAliasPlugin() {
   const aliases = new Map([
     ["@webbox/shared", path.join(projectRoot, "packages", "shared", "src", "index.ts")],
@@ -97,6 +139,12 @@ function writeServerConf() {
     "public-url=http://127.0.0.1:8787",
     "data-dir=data",
     "storage-root=data/files",
+    "photos-root=data/photos",
+    "documents-root=data/documents",
+    "music-root=data/music",
+    "videos-root=data/videos",
+    "safe-root=data/safe-box",
+    "recycle-root=data/recycle",
     "plugin-root=plugins",
     "static-root=web",
     "# Append backend output to a file. Comment this line to disable file logging.",
@@ -172,6 +220,7 @@ $staticRootValue = Get-ConfigValue $config @("static-root", "staticRoot") "web"
 $logFileValue = Get-ConfigValue $config @("log-file", "logFile") ""
 
 $env:WEBBOX_HOST = $hostValue
+$env:WEBBOX_CONFIG = $ConfigFile
 $env:WEBBOX_PORT = $portValue
 $env:WEBBOX_PUBLIC_URL = $publicUrlValue
 $env:WEBBOX_DATA = Resolve-ConfigPath $dataDirValue
@@ -247,6 +296,7 @@ function writeShellLauncher() {
     "LOG_FILE=$(get_config_value log-file \"\")",
     "",
     "export WEBBOX_HOST=$HOST",
+    "export WEBBOX_CONFIG=$CONFIG_FILE",
     "export WEBBOX_PORT=$PORT",
     "export WEBBOX_PUBLIC_URL=$PUBLIC_URL",
     "export WEBBOX_DATA=$(resolve_config_path \"$DATA_DIR\")",
@@ -275,6 +325,7 @@ async function main() {
   log(`Output directory: ${outDir}`);
   cleanOut();
   run("corepack", ["pnpm", "-C", projectRoot, "--filter", "@webbox/web", "exec", "vite", "build", "--outDir", webOutDir, "--emptyOutDir"]);
+  copyKodboxResources();
   await bundleServer();
   writeServerConf();
   writeTimestampHook();

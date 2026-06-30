@@ -1,24 +1,55 @@
-import { Copy, Download, Edit3, FileArchive, FolderInput, Info, Trash2 } from "lucide-react";
+import { Copy, Download, Edit3, FileArchive, FolderInput, Info, RotateCcw, Star, Trash2 } from "lucide-react";
 import { text } from "../i18n";
 
-const actions = [
-  [text.contextMenu.actions.open, Edit3],
-  [text.contextMenu.actions.preview, Info],
-  [text.contextMenu.actions.download, Download],
-  [text.contextMenu.actions.rename, Edit3],
-  [text.contextMenu.actions.copy, Copy],
-  [text.contextMenu.actions.move, FolderInput],
-  [text.contextMenu.actions.delete, Trash2],
-  [text.contextMenu.actions.archive, FileArchive],
-  [text.contextMenu.actions.properties, Info]
-] as const;
+export type ContextAction = "open" | "download" | "rename" | "copy" | "move" | "recycle" | "restore" | "deleteForever" | "archive" | "favorite" | "properties";
 
-export function ContextMenu() {
+const iconMap = {
+  open: Edit3,
+  download: Download,
+  rename: Edit3,
+  copy: Copy,
+  move: FolderInput,
+  recycle: Trash2,
+  restore: RotateCcw,
+  deleteForever: Trash2,
+  archive: FileArchive,
+  favorite: Star,
+  properties: Info
+};
+
+const labelMap: Record<ContextAction, string> = {
+  open: text.contextMenu.actions.open,
+  download: text.contextMenu.actions.download,
+  rename: text.contextMenu.actions.rename,
+  copy: text.contextMenu.actions.copy,
+  move: text.contextMenu.actions.move,
+  recycle: text.contextMenu.actions.recycle,
+  restore: text.contextMenu.actions.restore,
+  deleteForever: text.contextMenu.actions.deleteForever,
+  archive: text.contextMenu.actions.archive,
+  favorite: text.contextMenu.actions.favorite,
+  properties: text.contextMenu.actions.properties
+};
+
+interface ContextMenuProps {
+  x?: number;
+  y?: number;
+  actions?: ContextAction[];
+  onAction?: (action: ContextAction) => void;
+}
+
+export function ContextMenu({ x = 0, y = 0, actions = ["open", "download", "rename", "copy", "move", "recycle", "archive", "favorite", "properties"], onAction }: ContextMenuProps) {
   return (
-    <div className="context-menu" aria-label={text.contextMenu.label}>
-      {actions.map(([label, Icon]) => (
-        <button key={label} type="button"><Icon size={15} />{label}</button>
-      ))}
+    <div className="context-menu" aria-label={text.contextMenu.label} style={{ left: x, top: y }}>
+      {actions.map((action) => {
+        const Icon = iconMap[action];
+        return (
+          <button key={action} type="button" onClick={() => onAction?.(action)}><Icon size={15} />{labelMap[action]}</button>
+        );
+      })}
+      {/*
+        Removed by design: 编辑锁定, 快速外链分享, 创建快捷方式, 发送到桌面快捷方式.
+      */}
     </div>
   );
 }

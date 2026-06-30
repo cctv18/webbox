@@ -73,6 +73,23 @@ button {
   gap: 6px;
 }
 
+.navigation-tree {
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.tree-section {
+  display: grid;
+  gap: 6px;
+}
+
+.tree-section h2 {
+  margin: 12px 4px 4px;
+  color: #687986;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .tree-item,
 .toolbar button,
 .bottom-popover button,
@@ -156,18 +173,26 @@ button {
 
 .content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr) 300px 220px;
   gap: 12px;
   padding: 12px;
   min-height: 0;
 }
 
 .file-list,
+.file-surface,
+.inspector-panel,
 .side-panel,
 .admin-panel {
   background: #ffffff;
   border: 1px solid #d8e0e4;
   border-radius: 8px;
+}
+
+.file-surface {
+  min-width: 0;
+  min-height: 360px;
+  overflow: auto;
 }
 
 .file-row {
@@ -191,6 +216,53 @@ button {
 .file-row:not(.header):hover {
   background: #f6fbfd;
   box-shadow: inset 3px 0 0 #6aa6d8;
+}
+
+.file-row.selected,
+.file-tile.selected {
+  background: #dff0ff;
+  box-shadow: inset 3px 0 0 #3f8fce;
+}
+
+.file-row span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.file-tile {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 112px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172026;
+  cursor: pointer;
+  text-align: center;
+}
+
+.file-tile:hover {
+  border-color: #7eb0d5;
+  background: #f6fbfd;
+}
+
+.file-tile span {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
 }
 
 .empty,
@@ -234,6 +306,21 @@ button {
   position: relative;
   display: flex;
   gap: 8px;
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #d94841;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .icon-button {
@@ -302,8 +389,162 @@ button {
 }
 
 .context-menu {
+  position: fixed;
+  min-width: 190px;
   display: grid;
   gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd6dc;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgb(31 45 61 / 18%);
+  z-index: 60;
+}
+
+.notification-panel {
+  position: absolute;
+  left: 0;
+  bottom: 44px;
+  width: 280px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid #cbd6dc;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgb(31 45 61 / 15%);
+  z-index: 20;
+}
+
+.notification-panel header,
+.inspector-panel header,
+.inspector-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.notification-panel h2,
+.inspector-panel h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.notification-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.notification-item.read {
+  color: #687986;
+}
+
+.inspector-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.inspector-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+.properties-tab,
+.memo-tab,
+.activity-tab {
+  display: grid;
+  gap: 10px;
+}
+
+.properties-tab dl {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 6px 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.properties-tab dt {
+  color: #687986;
+}
+
+.properties-tab dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.properties-tab label,
+.memo-tab label,
+.storage-field,
+.safe-dialog label {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.properties-tab input,
+.properties-tab textarea,
+.memo-tab textarea,
+.storage-field input,
+.safe-dialog input {
+  width: 100%;
+  border: 1px solid #cbd6dc;
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+}
+
+.memo-tab textarea,
+.properties-tab textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.memo-entry,
+.activity-entry {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #edf1f3;
+  border-radius: 6px;
+  background: #f8fafb;
+}
+
+.activity-entry span,
+.activity-entry time {
+  color: #687986;
+  font-size: 12px;
+}
+
+.inspector-tabs {
+  margin-top: auto;
+  border-top: 1px solid #edf1f3;
+  border-bottom: 0;
+}
+
+.inspector-tabs button,
+.notification-panel button,
+.properties-tab button,
+.memo-tab button,
+.admin-panel button,
+.safe-dialog button {
+  border: 1px solid #cbd6dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #172026;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.inspector-tabs .active {
+  background: #e8f3ff;
+  border-color: #6aa6d8;
 }
 
 .viewer {
@@ -317,6 +558,28 @@ button {
   place-items: center;
   background: rgb(23 32 38 / 36%);
   padding: 24px;
+}
+
+.safe-dialog {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d8e0e4;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(23 32 38 / 22%);
+}
+
+.safe-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.safe-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .admin-panel {

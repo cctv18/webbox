@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { ActivityRecord, MemoEntry, NotificationItem, PathMetadata } from "@webbox/shared";
 
 export interface WebboxMetadata {
   theme: string;
@@ -7,6 +8,15 @@ export interface WebboxMetadata {
   notifications: string[];
   recycle: Record<string, { originalPath: string; deletedAt: string }>;
   plugins: Record<string, boolean>;
+  favoritePaths: string[];
+  pathMetadata: Record<string, PathMetadata>;
+  memos: MemoEntry[];
+  activity: ActivityRecord[];
+  notificationItems: NotificationItem[];
+  safeBox?: {
+    passwordHash: string;
+    salt: string;
+  };
 }
 
 const defaultMetadata: WebboxMetadata = {
@@ -14,7 +24,12 @@ const defaultMetadata: WebboxMetadata = {
   language: "zh-CN",
   notifications: [],
   recycle: {},
-  plugins: {}
+  plugins: {},
+  favoritePaths: [],
+  pathMetadata: {},
+  memos: [],
+  activity: [],
+  notificationItems: []
 };
 
 export class MetadataStore {
@@ -34,5 +49,12 @@ export class MetadataStore {
   async save(next: WebboxMetadata): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     await fs.writeFile(this.filePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  }
+
+  async update(mutator: (state: WebboxMetadata) => void | Promise<void>): Promise<WebboxMetadata> {
+    const state = await this.load();
+    await mutator(state);
+    await this.save(state);
+    return state;
   }
 }

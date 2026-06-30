@@ -4,9 +4,9 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import unzipper from "unzipper";
-import { type FileItem, resolveInsideRoot, toVirtualPath } from "@webbox/shared";
+import { type FileDetails, type FileItem, type RecycleRecord, resolveInsideRoot, toVirtualPath } from "@webbox/shared";
 
-interface RecycleRecord {
+interface RecycleIndexRecord {
   recycleId: string;
   originalPath: string;
   recycledPath: string;
@@ -92,6 +92,27 @@ export class FileService {
     return { recycleId };
   }
 
+  async listRecycle(): Promise<RecycleRecord[]> {
+    const index = await this.readRecycleIndex();
+    const records = await Promise.all(Object.values(index).map(async (record) => {
+      let stat;
+      try {
+        stat = await fsp.stat(record.recycledPath);
+      } catch {
+        stat = undefined;
+      }
+      return {
+        recycleId: record.recycleId,
+        name: path.basename(record.originalPath),
+        originalPath: record.originalPath,
+        deletedAt: record.deletedAt,
+        kind: stat?.isDirectory() ? "directory" : "file",
+        size: stat && !stat.isDirectory() ? stat.size : 0
+      } satisfies RecycleRecord;
+    }));
+    return records.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+  }
+
   async restore(recycleId: string): Promise<{ path: string }> {
     const index = await this.readRecycleIndex();
     const record = index[recycleId];
@@ -102,6 +123,32 @@ export class FileService {
     delete index[recycleId];
     await this.writeRecycleIndex(index);
     return { path: record.originalPath };
+  }
+
+  async removeRecycle(recycleId: string): Promise<void> {
+    const index = await this.readRecycleIndex();
+    const record = index[recycleId];
+    if (!record) throw new Error("PATH_NOT_FOUND");
+    await fsp.rm(record.recycledPath, { recursive: true, force: true });
+    delete index[recycleId];
+    await this.writeRecycleIndex(index);
+  }
+
+  async clearRecycle(): Promise<void> {
+    const index = await this.readRecycleIndex();
+    await Promise.all(Object.values(index).map((record) => fsp.rm(record.recycledPath, { recursive: true, force: true })));
+    await this.writeRecycleIndex({});
+  }
+
+  async details(virtualPath: string): Promise<FileDetails> {
+    const absolute = resolveInsideRoot(this.root, virtualPath);
+    const item = await this.toFileItem(absolute);
+    return {
+      ...item,
+      tags: [],
+      description: "",
+      absolutePath: absolute
+    };
   }
 
   async search(query: string, virtualPath = "/"): Promise<FileItem[]> {
@@ -183,20 +230,22 @@ export class FileService {
       kind: isDirectory ? "directory" : "file",
       size: isDirectory ? 0 : stat.size,
       modifiedAt: stat.mtime.toISOString(),
+      createdAt: stat.birthtime.toISOString(),
+      accessedAt: stat.atime.toISOString(),
       extension: isDirectory ? "" : path.extname(name).slice(1).toLowerCase()
     };
   }
 
-  private async readRecycleIndex(): Promise<Record<string, RecycleRecord>> {
+  private async readRecycleIndex(): Promise<Record<string, RecycleIndexRecord>> {
     try {
       const raw = await fsp.readFile(this.recycleIndexPath, "utf8");
-      return JSON.parse(raw) as Record<string, RecycleRecord>;
+      return JSON.parse(raw) as Record<string, RecycleIndexRecord>;
     } catch {
       return {};
     }
   }
 
-  private async writeRecycleIndex(index: Record<string, RecycleRecord>): Promise<void> {
+  private async writeRecycleIndex(index: Record<string, RecycleIndexRecord>): Promise<void> {
     await fsp.mkdir(path.dirname(this.recycleIndexPath), { recursive: true });
     await fsp.writeFile(this.recycleIndexPath, `${JSON.stringify(index, null, 2)}\n`, "utf8");
   }

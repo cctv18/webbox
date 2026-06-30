@@ -3,7 +3,7 @@ import { text } from "../i18n";
 
 interface PluginViewerProps {
   fileName?: string;
-  plugins: PluginManifest[];
+  plugins: readonly PluginManifest[];
 }
 
 export function PluginViewer({ fileName = "", plugins }: PluginViewerProps) {

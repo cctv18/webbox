@@ -1,22 +1,30 @@
 import { Bell, Languages, Menu, Palette, Plug, Settings } from "lucide-react";
 import { useState } from "react";
+import type { NotificationItem } from "@webbox/shared";
 import { uiAssets } from "../assets";
 import { text } from "../i18n";
+import { NotificationPanel } from "./NotificationPanel";
 
 interface BottomMenuProps {
   onAdmin: () => void;
   onPlugins: () => void;
+  notifications?: NotificationItem[];
+  onNotificationRead?: (id: string) => void;
+  onNotificationClear?: () => void;
 }
 
-export function BottomMenu({ onAdmin, onPlugins }: BottomMenuProps) {
+export function BottomMenu({ onAdmin, onPlugins, notifications = [], onNotificationRead, onNotificationClear }: BottomMenuProps) {
   const [open, setOpen] = useState(false);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const unread = notifications.filter((item) => !item.read).length;
 
   return (
     <div className="bottom-menu">
-      <button title={text.bottomMenu.notificationTitle} aria-label={text.bottomMenu.notifications} type="button" className="icon-button notification-button">
+      <button title={text.bottomMenu.notificationTitle} aria-label={text.bottomMenu.notifications} type="button" className="icon-button notification-button" onClick={() => setNoticeOpen((value) => !value)}>
         <Bell size={18} />
+        {unread > 0 && <span className="badge">{unread}</span>}
       </button>
       <button title={text.bottomMenu.openMenuTitle} aria-label={text.bottomMenu.menu} type="button" className="icon-button" onClick={() => setOpen((value) => !value)}>
         <Menu size={18} />
@@ -32,6 +40,7 @@ export function BottomMenu({ onAdmin, onPlugins }: BottomMenuProps) {
           {themeOpen && <div className="sub-actions"><button type="button">{text.bottomMenu.themeSystem}</button><button type="button">{text.bottomMenu.themeLight}</button><button type="button">{text.bottomMenu.themeDark}</button></div>}
         </div>
       )}
+      {noticeOpen && <NotificationPanel items={notifications} onMarkRead={(id) => onNotificationRead?.(id)} onClear={() => onNotificationClear?.()} />}
     </div>
   );
 }
