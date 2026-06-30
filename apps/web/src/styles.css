@@ -19,7 +19,31 @@ button {
 }
 
 .status {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
   padding: 32px;
+}
+
+.status-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  min-height: 58px;
+  border: 1px solid #d8e0e4;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgb(31 45 61 / 10%);
+}
+
+.status-card img {
+  width: 24px;
+  height: 24px;
+}
+
+.status-loading {
+  animation: status-pulse 1.2s ease-in-out infinite;
 }
 
 .file-manager {
@@ -65,6 +89,32 @@ button {
   color: #172026;
   padding: 8px 10px;
   cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.tree-item:hover,
+.toolbar button:hover,
+.bottom-popover button:hover,
+.context-menu button:hover,
+.tabs button:hover,
+.panel-header button:hover,
+.sub-actions button:hover,
+.icon-button:hover {
+  border-color: #7eb0d5;
+  background: #f4fbff;
+}
+
+.tree-item:focus-visible,
+.toolbar button:focus-visible,
+.bottom-popover button:focus-visible,
+.context-menu button:focus-visible,
+.tabs button:focus-visible,
+.panel-header button:focus-visible,
+.sub-actions button:focus-visible,
+.icon-button:focus-visible,
+.file-row:focus-visible {
+  outline: 2px solid #4f8fc1;
+  outline-offset: 2px;
 }
 
 .tree-item {
@@ -130,11 +180,17 @@ button {
   border-bottom: 1px solid #edf1f3;
   background: transparent;
   text-align: left;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
 .file-row.header {
   font-weight: 600;
   background: #f8fafb;
+}
+
+.file-row:not(.header):hover {
+  background: #f6fbfd;
+  box-shadow: inset 3px 0 0 #6aa6d8;
 }
 
 .empty,
@@ -143,6 +199,34 @@ button {
 .context-menu,
 .admin-grid section {
   padding: 12px;
+}
+
+.empty {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: #60727f;
+  text-align: center;
+  animation: empty-rise 260ms ease-out;
+}
+
+.empty img {
+  width: min(180px, 48vw);
+  max-height: 136px;
+  object-fit: contain;
+  opacity: 0.9;
+}
+
+.empty strong {
+  color: #25323a;
+  font-size: 15px;
+}
+
+.empty span {
+  max-width: 280px;
+  font-size: 13px;
 }
 
 .bottom-menu {
@@ -160,6 +244,23 @@ button {
   border: 1px solid #cbd6dc;
   border-radius: 6px;
   background: #ffffff;
+  cursor: pointer;
+}
+
+.notification-button {
+  position: relative;
+}
+
+.notification-button::after {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #2f9e63;
+  box-shadow: 0 0 0 3px rgb(47 158 99 / 12%);
 }
 
 .bottom-popover {
@@ -174,6 +275,24 @@ button {
   border: 1px solid #cbd6dc;
   border-radius: 8px;
   box-shadow: 0 12px 28px rgb(31 45 61 / 15%);
+  animation: menu-rise 150ms ease-out;
+  z-index: 10;
+}
+
+.popover-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 4px 4px;
+  color: #60727f;
+  font-size: 12px;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.popover-status img {
+  width: 16px;
+  height: 16px;
 }
 
 .sub-actions {
@@ -204,6 +323,8 @@ button {
   width: min(920px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
+  box-shadow: 0 24px 70px rgb(23 32 38 / 22%);
+  animation: modal-rise 180ms ease-out;
 }
 
 .panel-header {
@@ -231,6 +352,51 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding: 12px 16px 18px;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes empty-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes menu-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 760px) {

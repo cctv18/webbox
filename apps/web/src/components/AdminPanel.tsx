@@ -1,4 +1,5 @@
 import type { PluginManifest } from "@webbox/shared";
+import { text } from "../i18n";
 
 interface AdminPanelProps {
   initialTab?: "overview" | "settings" | "storage" | "plugins" | "notice";
@@ -7,50 +8,50 @@ interface AdminPanelProps {
 }
 
 const tabs = [
-  ["overview", "概览"],
-  ["settings", "系统设置"],
-  ["storage", "存储/文件"],
-  ["plugins", "插件管理"],
-  ["notice", "通知管理"]
+  ["overview", text.admin.tabs.overview],
+  ["settings", text.admin.tabs.settings],
+  ["storage", text.admin.tabs.storage],
+  ["plugins", text.admin.tabs.plugins],
+  ["notice", text.admin.tabs.notice]
 ] as const;
 
 export function AdminPanel({ initialTab = "overview", plugins, onClose }: AdminPanelProps) {
   return (
-    <section className="admin-panel" aria-label="后台管理面板">
+    <section className="admin-panel" aria-label={text.admin.panelLabel}>
       <header className="panel-header">
-        <h2>后台管理</h2>
-        <button type="button" onClick={onClose}>关闭</button>
+        <h2>{text.admin.title}</h2>
+        <button type="button" onClick={onClose}>{text.admin.close}</button>
       </header>
-      <nav className="tabs" aria-label="后台管理">
+      <nav className="tabs" aria-label={text.admin.navLabel}>
         {tabs.map(([id, label]) => (
           <button className={id === initialTab ? "active" : ""} type="button" key={id}>{label}</button>
         ))}
       </nav>
       <div className="admin-grid">
         <section>
-          <h3>概览</h3>
-          <p>存储使用：等待服务端统计</p>
-          <p>运行状态：Webbox 本地服务</p>
+          <h3>{text.admin.tabs.overview}</h3>
+          <p>{text.admin.overviewStorage}</p>
+          <p>{text.admin.overviewStatus}</p>
         </section>
         <section>
-          <h3>系统设置</h3>
-          <p>语言、主题、上传限制和编辑器行为由 Webbox 设置管理。</p>
+          <h3>{text.admin.tabs.settings}</h3>
+          <p>{text.admin.settingsDescription}</p>
         </section>
         <section>
-          <h3>存储/文件</h3>
-          <p>个人文件根目录、回收站维护和缩略图选项。</p>
+          <h3>{text.admin.tabs.storage}</h3>
+          <p>{text.admin.storageDescription}</p>
         </section>
         <section>
-          <h3>插件管理</h3>
+          <h3>{text.admin.tabs.plugins}</h3>
           <ul>
             {plugins.length ? plugins.map((plugin) => (
-              <li key={plugin.id}>{plugin.name} · {plugin.compatible ? "核心兼容" : plugin.reason}</li>
-            )) : <li>未发现核心插件</li>}
+              <li key={plugin.id}>{plugin.name} · {plugin.compatible ? text.admin.pluginCoreCompatible : plugin.reason}</li>
+            )) : <li>{text.admin.noPlugins}</li>}
           </ul>
         </section>
         <section>
-          <h3>通知管理</h3>
-          <p>站内消息会通过左下角通知入口展示。</p>
+          <h3>{text.admin.tabs.notice}</h3>
+          <p>{text.admin.noticeDescription}</p>
         </section>
       </div>
     </section>

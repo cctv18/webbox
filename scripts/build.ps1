@@ -1,35 +1,49 @@
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
-Set-Location $Root
+$RunRoot = (Get-Location).Path
+$OutDir = Join-Path $RunRoot "out"
+New-Item -ItemType Directory -Force $OutDir | Out-Null
+$BuildLog = Join-Path $OutDir "webbox-build.log"
 
 $env:COREPACK_HOME = if ($env:COREPACK_HOME) { $env:COREPACK_HOME } else { Join-Path (Split-Path -Parent $Root) ".corepack" }
 $env:NPM_CONFIG_CACHE = if ($env:NPM_CONFIG_CACHE) { $env:NPM_CONFIG_CACHE } else { Join-Path (Split-Path -Parent $Root) ".npm-cache" }
 $env:ELECTRON_CACHE = if ($env:ELECTRON_CACHE) { $env:ELECTRON_CACHE } else { Join-Path $env:NPM_CONFIG_CACHE "electron" }
 $env:ELECTRON_MIRROR = if ($env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR } else { "https://npmmirror.com/mirrors/electron/" }
+$env:NODE_OPTIONS = if ($env:NODE_OPTIONS) { $env:NODE_OPTIONS } else { "--no-deprecation" }
 
-corepack pnpm install --store-dir (Join-Path $env:NPM_CONFIG_CACHE "pnpm-store")
+@"
+================ WEBBOX BUILD LOG ================
+Started at: $(Get-Date -Format o)
+Project root: $Root
+Run directory: $RunRoot
+Output directory: $OutDir
+Node.js: $(node --version)
+
+"@ | Set-Content -Encoding UTF8 -LiteralPath $BuildLog
+
+function Invoke-Step([string]$Name, [scriptblock]$Command) {
+  Write-Host "==> $Name"
+  "==> $Name" | Add-Content -Encoding UTF8 -LiteralPath $BuildLog
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    & $Command 2>&1 | Tee-Object -FilePath $BuildLog -Append
+    $status = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($status -ne 0) {
+    throw "$Name failed with exit code $status"
+  }
+}
+
+Invoke-Step "Install dependencies" { corepack pnpm -C $Root install --store-dir (Join-Path $env:NPM_CONFIG_CACHE "pnpm-store") }
 $ElectronInstall = Join-Path $Root "apps\electron\node_modules\electron\install.js"
 if (Test-Path $ElectronInstall) {
-  node $ElectronInstall
+  Invoke-Step "Install Electron runtime" { node $ElectronInstall }
 }
-corepack pnpm test
-corepack pnpm build
+Invoke-Step "Run tests" { corepack pnpm -C $Root test }
+Invoke-Step "Compile artifact" { node (Join-Path $Root "scripts\compile-webbox.mjs") }
 
-New-Item -ItemType Directory -Force "$Root\dist" | Out-Null
-@"
-`$ErrorActionPreference = "Stop"
-`$Root = Split-Path -Parent `$PSScriptRoot
-Set-Location `$Root
-`$env:WEBBOX_PORT = if (`$env:WEBBOX_PORT) { `$env:WEBBOX_PORT } else { "8787" }
-node packages/server/dist/index.js
-"@ | Set-Content -Encoding UTF8 "$Root\dist\run-webbox.ps1"
-@"
-#!/usr/bin/env sh
-set -eu
-ROOT=`$(CDPATH= cd -- "`$(dirname -- "`$0")/.." && pwd)
-cd "`$ROOT"
-export WEBBOX_PORT="`${WEBBOX_PORT:-8787}"
-node packages/server/dist/index.js
-"@ | Set-Content -Encoding UTF8 "$Root\dist\run-webbox.sh"
-
-Write-Host "Build complete. Run: powershell -ExecutionPolicy Bypass -File dist\run-webbox.ps1"
+Write-Host "Build complete. Configure $OutDir\server.conf, then run:"
+Write-Host "powershell -ExecutionPolicy Bypass -File $OutDir\run-webbox.ps1"

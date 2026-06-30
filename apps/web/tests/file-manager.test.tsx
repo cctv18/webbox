@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { zhCN } from "@webbox/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../src/App";
+
+const text = zhCN;
 
 const bootstrap = {
   user: { id: "local", name: "Local User", isAdmin: true, permissions: ["*"] },
@@ -25,10 +28,10 @@ describe("Webbox UI", () => {
 
   it("renders the file manager and compact bottom menu", async () => {
     render(<AppShell bootstrap={bootstrap} />);
-    expect(await screen.findByText("此文件夹为空")).toBeInTheDocument();
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Webbox" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "通知" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "菜单" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: text.bottomMenu.notifications })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: text.bottomMenu.menu })).toBeInTheDocument();
     expect(screen.queryByText("企业网盘")).not.toBeInTheDocument();
     expect(screen.queryByText("我在的部门")).not.toBeInTheDocument();
     expect(screen.queryByText("与我协作")).not.toBeInTheDocument();
@@ -38,19 +41,19 @@ describe("Webbox UI", () => {
 
   it("opens the compact menu with the retained entries only", async () => {
     render(<AppShell bootstrap={bootstrap} />);
-    expect(await screen.findByText("此文件夹为空")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
-    expect(screen.getByRole("button", { name: "后台管理" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "插件管理" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "多语言" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "主题样式" })).toBeInTheDocument();
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.menu }));
+    expect(screen.getByRole("button", { name: text.bottomMenu.admin })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: text.bottomMenu.plugins })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: text.bottomMenu.languages })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: text.bottomMenu.theme })).toBeInTheDocument();
   });
 
   it("does not render removed admin sections", async () => {
     render(<AppShell bootstrap={bootstrap} />);
-    expect(await screen.findByText("此文件夹为空")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "菜单" }));
-    fireEvent.click(screen.getByRole("button", { name: "后台管理" }));
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.menu }));
+    fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.admin }));
     expect(screen.queryByText("部门与成员管理")).not.toBeInTheDocument();
     expect(screen.queryByText("登录日志")).not.toBeInTheDocument();
     expect(screen.queryByText("客户端及App")).not.toBeInTheDocument();
@@ -63,7 +66,7 @@ describe("Webbox UI", () => {
 
   it("does not render removed context menu actions", async () => {
     render(<AppShell bootstrap={bootstrap} />);
-    expect(await screen.findByText("此文件夹为空")).toBeInTheDocument();
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
     expect(screen.queryByText("编辑锁定")).not.toBeInTheDocument();
     expect(screen.queryByText("快速外链分享")).not.toBeInTheDocument();
     expect(screen.queryByText("创建快捷方式")).not.toBeInTheDocument();

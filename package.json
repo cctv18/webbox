@@ -6,12 +6,13 @@
   "type": "module",
   "packageManager": "pnpm@10.12.4",
   "scripts": {
-    "build": "corepack pnpm -r --sort build",
+    "build": "node scripts/compile-webbox.mjs",
+    "build:packages": "corepack pnpm -r --sort build",
     "dev": "corepack pnpm --filter @webbox/server dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "corepack pnpm -r --sort lint",
-    "start": "node packages/server/dist/index.js"
+    "start": "node out/webbox-server.js"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
@@ -26,6 +27,7 @@
     "@types/supertest": "^6.0.3",
     "@types/unzipper": "^0.10.11",
     "@vitejs/plugin-react": "^4.6.0",
+    "esbuild": "^0.25.12",
     "jsdom": "^26.1.0",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",

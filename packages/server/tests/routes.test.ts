@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import { zhCN } from "@webbox/shared";
 import { createApp } from "../src/app.js";
 
 describe("server routes", () => {
@@ -11,7 +11,9 @@ describe("server routes", () => {
   let pluginRoot: string;
 
   beforeEach(async () => {
-    dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "webbox-route-data-"));
+    const testRoot = path.join(process.cwd(), ".webbox-test-data");
+    await fs.mkdir(testRoot, { recursive: true });
+    dataRoot = await fs.mkdtemp(path.join(testRoot, "route-data-"));
     storageRoot = path.join(dataRoot, "files");
     pluginRoot = path.join(dataRoot, "plugins");
   });
@@ -66,5 +68,17 @@ describe("server routes", () => {
     await request(app).get("/api/desktop").expect(404);
     await request(app).get("/api/users").expect(404);
     await request(app).get("/api/history").expect(404);
+  });
+
+  it("writes request and file operation logs to the configured log file", async () => {
+    const logFile = path.join(dataRoot, "webbox.log");
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot, logFile });
+
+    await request(app).get("/api/files").query({ path: "/" }).expect(200);
+
+    const logText = await fs.readFile(logFile, "utf8");
+    expect(logText).toContain("GET /api/files");
+    expect(logText).toContain("file.list");
+    expect(logText).toContain(zhCN.server.logs.requestComplete);
   });
 });

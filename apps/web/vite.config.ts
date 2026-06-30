@@ -3,6 +3,11 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@webbox/shared": new URL("../../packages/shared/src/index.ts", import.meta.url).pathname
+    }
+  },
   server: {
     host: "127.0.0.1",
     port: 5173,

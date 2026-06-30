@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { BootstrapData } from "@webbox/shared";
 import { client } from "./api/client";
 import { FileManager } from "./components/FileManager";
+import { uiAssets } from "./assets";
+import { text } from "./i18n";
 import "./styles.css";
 
 export function AppShell({ bootstrap }: { bootstrap: BootstrapData }) {
@@ -27,7 +29,21 @@ export default function App() {
     };
   }, []);
 
-  if (error) return <div className="status">加载失败：{error}</div>;
-  if (!bootstrap) return <div className="status">加载中</div>;
+  if (error) {
+    return (
+      <div className="status status-card">
+        <img src={uiAssets.error} alt="" />
+        <span>{text.app.loadFailed}：{error}</span>
+      </div>
+    );
+  }
+  if (!bootstrap) {
+    return (
+      <div className="status status-card">
+        <img className="status-loading" src={uiAssets.loading} alt="" />
+        <span>{text.app.loading}</span>
+      </div>
+    );
+  }
   return <AppShell bootstrap={bootstrap} />;
 }

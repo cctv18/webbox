@@ -1,4 +1,5 @@
 import type { PluginManifest } from "@webbox/shared";
+import { text } from "../i18n";
 
 interface PluginViewerProps {
   fileName?: string;
@@ -10,8 +11,8 @@ export function PluginViewer({ fileName = "", plugins }: PluginViewerProps) {
   const plugin = plugins.find((item) => item.enabled && item.compatible && item.extensions.includes(extension));
   return (
     <section className="viewer">
-      <h3>文件预览</h3>
-      <p>{plugin ? `${plugin.name} · ${plugin.category}` : "内置预览"}</p>
+      <h3>{text.pluginViewer.title}</h3>
+      <p>{plugin ? `${plugin.name} · ${plugin.category}` : text.pluginViewer.builtinPreview}</p>
     </section>
   );
 }

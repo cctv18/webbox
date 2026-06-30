@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FileService } from "../src/fileService.js";
@@ -10,7 +9,9 @@ describe("FileService", () => {
   let service: FileService;
 
   beforeEach(async () => {
-    dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "webbox-data-"));
+    const testRoot = path.join(process.cwd(), ".webbox-test-data");
+    await fs.mkdir(testRoot, { recursive: true });
+    dataRoot = await fs.mkdtemp(path.join(testRoot, "file-data-"));
     root = path.join(dataRoot, "files");
     service = new FileService(root, dataRoot);
   });

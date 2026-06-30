@@ -1,32 +1,48 @@
 #!/usr/bin/env sh
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$ROOT"
+RUN_ROOT=$(pwd)
+OUT_DIR="$RUN_ROOT/out"
+mkdir -p "$OUT_DIR"
+BUILD_LOG="$OUT_DIR/webbox-build.log"
+
 export COREPACK_HOME="${COREPACK_HOME:-$(CDPATH= cd -- "$ROOT/.." && pwd)/.corepack}"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$(CDPATH= cd -- "$ROOT/.." && pwd)/.npm-cache}"
 export ELECTRON_CACHE="${ELECTRON_CACHE:-$NPM_CONFIG_CACHE/electron}"
 export ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
-corepack pnpm install --store-dir "$NPM_CONFIG_CACHE/pnpm-store"
+export NODE_OPTIONS="${NODE_OPTIONS:---no-deprecation}"
+
+cat > "$BUILD_LOG" <<EOF
+================ WEBBOX BUILD LOG ================
+Started at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+Project root: $ROOT
+Run directory: $RUN_ROOT
+Output directory: $OUT_DIR
+Node.js: $(node --version)
+
+EOF
+
+run_step() {
+  name=$1
+  shift
+  echo "==> $name" | tee -a "$BUILD_LOG"
+  tmp_log="$OUT_DIR/.webbox-command.log"
+  if "$@" > "$tmp_log" 2>&1; then
+    cat "$tmp_log" | tee -a "$BUILD_LOG"
+    rm -f "$tmp_log"
+  else
+    status=$?
+    cat "$tmp_log" | tee -a "$BUILD_LOG"
+    rm -f "$tmp_log"
+    echo "$name failed with exit code $status" | tee -a "$BUILD_LOG" >&2
+    exit "$status"
+  fi
+}
+
+run_step "Install dependencies" corepack pnpm -C "$ROOT" install --store-dir "$NPM_CONFIG_CACHE/pnpm-store"
 if [ -f "$ROOT/apps/electron/node_modules/electron/install.js" ]; then
-  node "$ROOT/apps/electron/node_modules/electron/install.js"
+  run_step "Install Electron runtime" node "$ROOT/apps/electron/node_modules/electron/install.js"
 fi
-corepack pnpm test
-corepack pnpm build
-mkdir -p "$ROOT/dist"
-cat > "$ROOT/dist/run-webbox.sh" <<'EOF'
-#!/usr/bin/env sh
-set -eu
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$ROOT"
-export WEBBOX_PORT="${WEBBOX_PORT:-8787}"
-node packages/server/dist/index.js
-EOF
-chmod +x "$ROOT/dist/run-webbox.sh"
-cat > "$ROOT/dist/run-webbox.ps1" <<'EOF'
-$ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent $PSScriptRoot
-Set-Location $Root
-$env:WEBBOX_PORT = if ($env:WEBBOX_PORT) { $env:WEBBOX_PORT } else { "8787" }
-node packages/server/dist/index.js
-EOF
-echo "Build complete. Run: ./dist/run-webbox.sh"
+run_step "Run tests" corepack pnpm -C "$ROOT" test
+run_step "Compile artifact" node "$ROOT/scripts/compile-webbox.mjs"
+echo "Build complete. Configure $OUT_DIR/server.conf, then run: sh $OUT_DIR/run-webbox.sh"
