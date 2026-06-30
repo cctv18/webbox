@@ -1,48 +1,74 @@
 #!/usr/bin/env sh
 set -eu
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+RUN_TESTS=0
+
+usage() {
+  cat <<'USAGE'
+Usage: sh scripts/build.sh [options]
+
+Options:
+  --test, -test    Run tests before producing the out artifact
+  -h, --help       Show this help
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --test|-test)
+      RUN_TESTS=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+SCRIPT_PATH=$0
+case "$SCRIPT_PATH" in
+  /*) ;;
+  *) SCRIPT_PATH=$PWD/$SCRIPT_PATH ;;
+esac
+ROOT=$(CDPATH= cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd)
 RUN_ROOT=$(pwd)
 OUT_DIR="$RUN_ROOT/out"
-mkdir -p "$OUT_DIR"
 BUILD_LOG="$OUT_DIR/webbox-build.log"
+mkdir -p "$OUT_DIR"
 
+export NO_COLOR="${NO_COLOR:-1}"
+export FORCE_COLOR="${FORCE_COLOR:-0}"
+export NODE_OPTIONS="${NODE_OPTIONS:---no-deprecation}"
 export COREPACK_HOME="${COREPACK_HOME:-$(CDPATH= cd -- "$ROOT/.." && pwd)/.corepack}"
 export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$(CDPATH= cd -- "$ROOT/.." && pwd)/.npm-cache}"
 export ELECTRON_CACHE="${ELECTRON_CACHE:-$NPM_CONFIG_CACHE/electron}"
 export ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
-export NODE_OPTIONS="${NODE_OPTIONS:---no-deprecation}"
 
-cat > "$BUILD_LOG" <<EOF
-================ WEBBOX BUILD LOG ================
-Started at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-Project root: $ROOT
-Run directory: $RUN_ROOT
-Output directory: $OUT_DIR
-Node.js: $(node --version)
-
-EOF
-
-run_step() {
-  name=$1
-  shift
-  echo "==> $name" | tee -a "$BUILD_LOG"
-  tmp_log="$OUT_DIR/.webbox-command.log"
-  if "$@" > "$tmp_log" 2>&1; then
-    cat "$tmp_log" | tee -a "$BUILD_LOG"
-    rm -f "$tmp_log"
-  else
-    status=$?
-    cat "$tmp_log" | tee -a "$BUILD_LOG"
-    rm -f "$tmp_log"
-    echo "$name failed with exit code $status" | tee -a "$BUILD_LOG" >&2
-    exit "$status"
-  fi
+command -v node >/dev/null 2>&1 || {
+  echo "Node.js 20 or newer is required to build Webbox." >&2
+  exit 1
 }
 
-run_step "Install dependencies" corepack pnpm -C "$ROOT" install --store-dir "$NPM_CONFIG_CACHE/pnpm-store"
-if [ -f "$ROOT/apps/electron/node_modules/electron/install.js" ]; then
-  run_step "Install Electron runtime" node "$ROOT/apps/electron/node_modules/electron/install.js"
+NODE_MAJOR=$(node -p "Number(process.versions.node.split('.')[0])")
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "Node.js 20 or newer is required to build Webbox. Current version: $(node -v)" >&2
+  exit 1
 fi
-run_step "Run tests" corepack pnpm -C "$ROOT" test
-run_step "Compile artifact" node "$ROOT/scripts/compile-webbox.mjs"
+
+echo "==> Webbox build output: $OUT_DIR"
+echo "==> Webbox build log: $BUILD_LOG"
+if [ "$RUN_TESTS" -eq 1 ]; then
+  echo "==> Tests: enabled"
+  node "$ROOT/scripts/compile-webbox.mjs" --install --test --out-dir "$OUT_DIR" --log-file "$BUILD_LOG"
+else
+  echo "==> Tests: disabled"
+  node "$ROOT/scripts/compile-webbox.mjs" --install --out-dir "$OUT_DIR" --log-file "$BUILD_LOG"
+fi
+
 echo "Build complete. Configure $OUT_DIR/server.conf, then run: sh $OUT_DIR/run-webbox.sh"

@@ -1,49 +1,63 @@
+param(
+  [switch]$Test
+)
+
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = [Console]::OutputEncoding
+$env:NO_COLOR = if ($env:NO_COLOR) { $env:NO_COLOR } else { "1" }
+$env:FORCE_COLOR = if ($env:FORCE_COLOR) { $env:FORCE_COLOR } else { "0" }
+$env:NODE_OPTIONS = if ($env:NODE_OPTIONS) { $env:NODE_OPTIONS } else { "--no-deprecation" }
+
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $RunRoot = (Get-Location).Path
 $OutDir = Join-Path $RunRoot "out"
-New-Item -ItemType Directory -Force $OutDir | Out-Null
 $BuildLog = Join-Path $OutDir "webbox-build.log"
+New-Item -ItemType Directory -Force $OutDir | Out-Null
 
-$env:COREPACK_HOME = if ($env:COREPACK_HOME) { $env:COREPACK_HOME } else { Join-Path (Split-Path -Parent $Root) ".corepack" }
-$env:NPM_CONFIG_CACHE = if ($env:NPM_CONFIG_CACHE) { $env:NPM_CONFIG_CACHE } else { Join-Path (Split-Path -Parent $Root) ".npm-cache" }
+$cacheRoot = Split-Path -Parent $Root
+$env:COREPACK_HOME = if ($env:COREPACK_HOME) { $env:COREPACK_HOME } else { Join-Path $cacheRoot ".corepack" }
+$env:NPM_CONFIG_CACHE = if ($env:NPM_CONFIG_CACHE) { $env:NPM_CONFIG_CACHE } else { Join-Path $cacheRoot ".npm-cache" }
 $env:ELECTRON_CACHE = if ($env:ELECTRON_CACHE) { $env:ELECTRON_CACHE } else { Join-Path $env:NPM_CONFIG_CACHE "electron" }
 $env:ELECTRON_MIRROR = if ($env:ELECTRON_MIRROR) { $env:ELECTRON_MIRROR } else { "https://npmmirror.com/mirrors/electron/" }
-$env:NODE_OPTIONS = if ($env:NODE_OPTIONS) { $env:NODE_OPTIONS } else { "--no-deprecation" }
 
-@"
-================ WEBBOX BUILD LOG ================
-Started at: $(Get-Date -Format o)
-Project root: $Root
-Run directory: $RunRoot
-Output directory: $OutDir
-Node.js: $(node --version)
-
-"@ | Set-Content -Encoding UTF8 -LiteralPath $BuildLog
-
-function Invoke-Step([string]$Name, [scriptblock]$Command) {
-  Write-Host "==> $Name"
-  "==> $Name" | Add-Content -Encoding UTF8 -LiteralPath $BuildLog
-  $previousErrorActionPreference = $ErrorActionPreference
-  $ErrorActionPreference = "Continue"
-  try {
-    & $Command 2>&1 | Tee-Object -FilePath $BuildLog -Append
-    $status = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = $previousErrorActionPreference
-  }
-  if ($status -ne 0) {
-    throw "$Name failed with exit code $status"
-  }
+function Test-Command([string]$Name) {
+  return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
 }
 
-Invoke-Step "Install dependencies" { corepack pnpm -C $Root install --store-dir (Join-Path $env:NPM_CONFIG_CACHE "pnpm-store") }
-$ElectronInstall = Join-Path $Root "apps\electron\node_modules\electron\install.js"
-if (Test-Path $ElectronInstall) {
-  Invoke-Step "Install Electron runtime" { node $ElectronInstall }
+if (-not (Test-Command "node")) {
+  throw "Node.js 20 or newer is required to build Webbox."
 }
-Invoke-Step "Run tests" { corepack pnpm -C $Root test }
-Invoke-Step "Compile artifact" { node (Join-Path $Root "scripts\compile-webbox.mjs") }
+
+$nodeMajor = [int](& node -p "Number(process.versions.node.split('.')[0])")
+if ($nodeMajor -lt 20) {
+  throw "Node.js 20 or newer is required to build Webbox. Current version: $(& node -v)"
+}
+
+$arguments = @(
+  (Join-Path $Root "scripts\compile-webbox.mjs"),
+  "--install",
+  "--out-dir",
+  $OutDir,
+  "--log-file",
+  $BuildLog
+)
+if ($Test) {
+  $arguments += "--test"
+}
+
+Write-Host "==> Webbox build output: $OutDir"
+Write-Host "==> Webbox build log: $BuildLog"
+if ($Test) {
+  Write-Host "==> Tests: enabled"
+} else {
+  Write-Host "==> Tests: disabled"
+}
+
+& node @arguments
+if ($LASTEXITCODE -ne 0) {
+  throw "Webbox build failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Build complete. Configure $OutDir\server.conf, then run:"
 Write-Host "powershell -ExecutionPolicy Bypass -File $OutDir\run-webbox.ps1"
