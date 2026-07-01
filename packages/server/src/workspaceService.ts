@@ -1,9 +1,9 @@
-import type { AdminStorageConfig, TreeNode } from "@webbox/shared";
+import type { AdminStorageConfig, MountDefinition, TreeNode } from "@webbox/shared";
 import { zhCN } from "@webbox/shared";
 import type { SafeBoxService } from "./safeBoxService.js";
 
 export class WorkspaceService {
-  constructor(private readonly storage: AdminStorageConfig, private readonly safeBox: SafeBoxService) {}
+  constructor(private readonly storage: AdminStorageConfig, private readonly safeBox: SafeBoxService, private readonly mounts: MountDefinition[] = []) {}
 
   async tree(): Promise<TreeNode[]> {
     const safe = await this.safeBox.status();
@@ -55,6 +55,14 @@ export class WorkspaceService {
         path: "/网络挂载",
         icon: "computer",
         children: [
+          ...this.mounts.map((mount) => ({
+            id: `mount-${mount.id}`,
+            label: mount.name,
+            section: "mounts" as const,
+            kind: "mount" as const,
+            path: `/网络挂载/${mount.id}`,
+            icon: mount.type === "local" ? "folder" : "computer"
+          })),
           { id: "mount-add", label: "新增网络挂载", section: "mounts", kind: "virtual", path: "/网络挂载/新增网络挂载", icon: "computer" }
         ]
       }

@@ -37,13 +37,15 @@ describe("webbox build and runtime scripts", () => {
     expect(compiler).toContain("vite");
   });
 
-  it("launchers install runtime dependencies locally and keep the node process in the foreground", async () => {
+  it("launchers install runtime dependencies locally and stop the node child with the script", async () => {
     const compiler = await readProjectFile("scripts/compile-webbox.mjs");
 
     expect(compiler).toContain("ensure_runtime_dependencies");
     expect(compiler).toContain("npm install --omit=dev");
     expect(compiler).toContain("Starting Webbox on");
-    expect(compiler).toContain("exec node");
-    expect(compiler).not.toContain("Start-Process");
+    expect(compiler).toContain("WEBBOX_PARENT_PID");
+    expect(compiler).toContain("Start-Process");
+    expect(compiler).toContain("Stop-Process");
+    expect(compiler).toContain("trap cleanup INT TERM EXIT");
   });
 });

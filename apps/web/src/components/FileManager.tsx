@@ -1,6 +1,6 @@
-import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, FolderPlus, Grid2X2, List, RefreshCw, Search, Star, Upload } from "lucide-react";
+import { ArrowDownUp, ArrowLeft, ArrowRight, ChevronDown, Download, Eye, EyeOff, FilePlus, FolderPlus, Grid2X2, List, RefreshCw, Search, SlidersHorizontal, Star, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import type { BootstrapData, FavoriteEntry, FileItem, NotificationItem, SafeBoxStatus, SortKey, SortState, TemplateFileType, TreeNode, ViewMode } from "@webbox/shared";
+import type { BootstrapData, FavoriteEntry, FileItem, NotificationItem, SafeBoxStatus, SortKey, SortState, TemplateFileType, TreeNode, ViewMode, WebboxSettings } from "@webbox/shared";
 import { client } from "../api/client";
 import { AdminPanel } from "./AdminPanel";
 import { BottomMenu } from "./BottomMenu";
@@ -19,6 +19,8 @@ interface ContextState {
   actions: ContextAction[];
 }
 
+type ToolbarMenu = "upload" | "new-file" | "sort" | "icon-size" | null;
+
 function joinPath(base: string, name: string): string {
   return `${base.replace(/\/$/, "")}/${name}`.replace(/\/+/g, "/");
 }
@@ -26,6 +28,28 @@ function joinPath(base: string, name: string): string {
 function basename(value: string): string {
   return value.split("/").filter(Boolean).at(-1) ?? value;
 }
+
+function dirname(value: string): string {
+  const parts = value.split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
+}
+
+const templateLabels: Record<TemplateFileType, string> = {
+  txt: "TXT 文件",
+  md: "MD 文件",
+  html: "HTML 文件",
+  docx: "DOCX 文件",
+  xlsx: "XLSX 文件",
+  pptx: "PPTX 文件"
+};
+
+const sortLabels: Record<SortKey, string> = {
+  name: "名称",
+  type: "类型",
+  size: "大小",
+  modifiedAt: "修改时间"
+};
 
 function sortItems(items: FileItem[], sort: SortState): FileItem[] {
   const direction = sort.direction === "asc" ? 1 : -1;
@@ -85,12 +109,16 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const [pathDraft, setPathDraft] = useState(path);
   const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null);
+  const [toolbarMenu, setToolbarMenu] = useState<ToolbarMenu>(null);
+  const [operationProgress, setOperationProgress] = useState("");
+  const [explorerSettings, setExplorerSettings] = useState<WebboxSettings["explorer"] | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const folderUploadRef = useRef<HTMLInputElement>(null);
 
   const sortedItems = useMemo(() => sortItems(items, sort), [items, sort]);
   const selectedPath = selected[0] ?? path;
   const selectedItem = useMemo(() => items.find((item) => item.path === selected[0]), [items, selected]);
+  const selectedItems = useMemo(() => items.filter((item) => selected.includes(item.path)), [items, selected]);
   const favorite = favorites.find((entry) => entry.path === path);
 
   const load = async (nextPath = path) => {
@@ -117,9 +145,15 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setViewMode(settings.explorer.viewMode);
       setIconSize(settings.explorer.iconSize);
       setSort(settings.explorer.sort);
+      setExplorerSettings(settings.explorer);
     }).catch(() => undefined);
     void client.favorites().then(setFavorites).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!explorerSettings) return;
+    void client.saveSettings({ explorer: { ...explorerSettings, viewMode, iconSize, sort } }).catch(() => undefined);
+  }, [viewMode, iconSize, sort]);
 
   useEffect(() => {
     if (typeof EventSource === "undefined") return;
@@ -187,10 +221,20 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
     setSelectionAnchor(item.path);
   };
 
+  const replaceSelection = (paths: string[]) => {
+    setSelected(paths);
+    setSelectionAnchor(paths[0] ?? null);
+  };
+
+  const clearSelection = () => {
+    setSelected([]);
+    setSelectionAnchor(null);
+  };
+
   const openItem = (item: FileItem) => {
     if (path === "/工具/回收站") return;
     if (item.kind === "directory") void navigate(item.path);
-    else downloadPath(item.path);
+    else globalThis.open?.(client.openUrl(item.path), "_blank", "noopener");
   };
 
   const downloadPath = (targetPath = selected[0]) => {
@@ -224,19 +268,48 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       if (action === "open") openItem(item);
       if (action === "download") downloadPath(item.path);
       if (action === "rename") setInlineEdit({ mode: "rename", path: item.path, value: item.name });
+      if (action === "copy") {
+        const target = window.prompt("复制到路径", joinPath(path, item.name));
+        if (target) await client.copy(item.path, target);
+      }
+      if (action === "move") {
+        const target = window.prompt("移动到路径", joinPath(path, item.name));
+        if (target) await client.move(item.path, target);
+      }
       if (action === "recycle") await client.recycle(item.path);
       if (action === "restore") await client.restore(item.path);
       if (action === "deleteForever") await client.recycleDelete(item.path);
       if (action === "favorite") {
-        await client.addFavorite(item.path, item.name);
+        const existing = favorites.find((entry) => entry.path === item.path);
+        if (existing) await client.removeFavorite(existing.id);
+        else await client.addFavorite(item.path, item.name);
         setFavorites(await client.favorites());
       }
+      if (action === "archive") await archiveItem(item);
       if (action === "properties") setSelected([item.path]);
       if (!["open", "download", "rename", "favorite", "properties"].includes(action)) await load();
       await refreshNotifications();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  };
+
+  const archiveItem = async (item: FileItem) => {
+    const activePaths = selected.length ? selected : [item.path];
+    if (item.kind === "file" && item.extension === "zip") {
+      const targetDir = window.prompt("解压到路径", joinPath(path, basename(item.path).replace(/\.zip$/i, "")));
+      if (!targetDir) return;
+      setOperationProgress("正在解压...");
+      await client.unzip(item.path, targetDir);
+      setOperationProgress("解压完成");
+      return;
+    }
+    const defaultName = activePaths.length === 1 ? `${basename(activePaths[0]).replace(/\.[^.]+$/, "")}.zip` : "archive.zip";
+    const target = window.prompt("压缩文件保存为", joinPath(path, defaultName));
+    if (!target) return;
+    setOperationProgress("正在压缩...");
+    await client.zip(activePaths, target);
+    setOperationProgress("压缩完成");
   };
 
   const runSearch = async () => {
@@ -249,7 +322,9 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     for (const file of Array.from(files)) {
-      await client.upload(path, file);
+      const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? "";
+      const relativeDir = dirname(relativePath);
+      await client.upload(relativeDir ? joinPath(path, relativeDir) : path, file);
     }
     await load();
     await refreshNotifications();
@@ -338,33 +413,61 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
         </header>
         <header className="toolbar">
           <button type="button" onClick={() => void load()}><RefreshCw size={16} />{text.fileManager.refresh}</button>
-          <button type="button" onClick={() => uploadRef.current?.click()}><Upload size={16} />{text.fileManager.upload}</button>
-          <button type="button" onClick={() => folderUploadRef.current?.click()}>上传文件夹</button>
+          <div className="toolbar-group">
+            <button type="button" onClick={() => uploadRef.current?.click()}><Upload size={16} />{text.fileManager.upload}</button>
+            <button type="button" className="toolbar-arrow" aria-label="展开上传菜单" onClick={() => setToolbarMenu(toolbarMenu === "upload" ? null : "upload")}><ChevronDown size={14} /></button>
+            {toolbarMenu === "upload" && (
+              <div className="toolbar-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setToolbarMenu(null); folderUploadRef.current?.click(); }}>上传文件夹</button>
+              </div>
+            )}
+          </div>
           <input ref={uploadRef} hidden multiple type="file" onChange={(event) => void uploadFiles(event.currentTarget.files)} />
           <input ref={folderUploadRef} hidden multiple type="file" webkitdirectory="" directory="" onChange={(event) => void uploadFiles(event.currentTarget.files)} />
           <button type="button" onClick={() => downloadPath()}><Download size={16} />下载</button>
           <button type="button" onClick={() => setInlineEdit({ mode: "create-folder", value: "新建文件夹" })}><FolderPlus size={16} />{text.fileManager.newFolder}</button>
-          {(["txt", "md", "html", "docx", "xlsx", "pptx"] as TemplateFileType[]).map((type) => (
-            <button key={type} type="button" onClick={() => setInlineEdit({ mode: "create-template", templateType: type, value: `new.${type}` })}>{type}</button>
-          ))}
+          <div className="toolbar-group">
+            <button type="button" onClick={() => setToolbarMenu(toolbarMenu === "new-file" ? null : "new-file")}><FilePlus size={16} />{text.fileManager.newFile}<ChevronDown size={14} /></button>
+            {toolbarMenu === "new-file" && (
+              <div className="toolbar-menu" role="menu">
+                {(["txt", "md", "html", "docx", "xlsx", "pptx"] as TemplateFileType[]).map((type) => (
+                  <button key={type} type="button" role="menuitem" onClick={() => { setInlineEdit({ mode: "create-template", templateType: type, value: `new.${type}` }); setToolbarMenu(null); }}>{templateLabels[type]}</button>
+                ))}
+              </div>
+            )}
+          </div>
           <button type="button" aria-label={viewMode === "grid" ? text.fileManager.listView : text.fileManager.gridView} onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}>{viewMode === "grid" ? <List size={16} /> : <Grid2X2 size={16} />}</button>
-          <label className="icon-size-control">图标大小<input type="range" min="48" max="128" value={iconSize} onChange={(event) => setIconSize(Number(event.currentTarget.value))} /></label>
-          <select aria-label="排序方式" value={`${sort.key}:${sort.direction}`} onChange={(event) => {
-            const [key, direction] = event.currentTarget.value.split(":") as [SortKey, "asc" | "desc"];
-            setSort({ key, direction });
-          }}>
-            <option value="name:asc">名称升序</option>
-            <option value="name:desc">名称降序</option>
-            <option value="type:asc">类型升序</option>
-            <option value="size:desc">大小降序</option>
-            <option value="modifiedAt:desc">修改时间降序</option>
-          </select>
+          <div className="toolbar-group">
+            <button type="button" aria-label="调整图标大小" onClick={() => setToolbarMenu(toolbarMenu === "icon-size" ? null : "icon-size")}><SlidersHorizontal size={16} /></button>
+            {toolbarMenu === "icon-size" && (
+              <div className="toolbar-menu icon-size-popover" role="menu">
+                <input aria-label="图标大小" aria-orientation="vertical" className="vertical-range" type="range" min="48" max="128" value={iconSize} onChange={(event) => setIconSize(Number(event.currentTarget.value))} />
+              </div>
+            )}
+          </div>
+          <div className="toolbar-group">
+            <button type="button" aria-label="排序" onClick={() => setToolbarMenu(toolbarMenu === "sort" ? null : "sort")}><ArrowDownUp size={16} /></button>
+            {toolbarMenu === "sort" && (
+              <div className="toolbar-menu" role="menu">
+                {(["name", "type", "size", "modifiedAt"] as SortKey[]).map((key) => (
+                  <button key={key} type="button" role="menuitem" aria-label={sortLabels[key]} onClick={() => { toggleSort(key); setToolbarMenu(null); }}>{sortLabels[key]}{sort.key === key && <span aria-hidden="true">{sort.direction === "asc" ? " ↑" : " ↓"}</span>}</button>
+                ))}
+              </div>
+            )}
+          </div>
           <button type="button" onClick={() => setInspectorOpen((value) => !value)}>{inspectorOpen ? <EyeOff size={16} /> : <Eye size={16} />}{inspectorOpen ? "隐藏属性" : "显示属性"}</button>
-          {path.includes("私密保险箱") && <button type="button" onClick={() => void client.safeLogout()}>锁定</button>}
+          {path.includes("私密保险箱") && <button type="button" onClick={() => void client.safeLogout().then(() => setSafeStatus({ state: "locked", message: text.safeBox.locked, path }))}>锁定</button>}
         </header>
         {error && <div className="toast">{error}</div>}
-        <div className="content">
-          <main className="file-surface" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void uploadFiles(event.dataTransfer.files); }}>
+        <div className={inspectorOpen ? "content" : "content inspector-closed"}>
+          <main
+            className="file-surface"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) clearSelection();
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => { event.preventDefault(); void uploadFiles(event.dataTransfer.files); }}
+          >
             <FileGrid
               items={sortedItems}
               selected={selected}
@@ -373,6 +476,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
               inlineEdit={inlineEdit}
               onOpen={openItem}
               onSelect={selectItem}
+              onSelectionChange={replaceSelection}
+              onClearSelection={clearSelection}
               onContextMenu={openContext}
               onSort={toggleSort}
               onInlineChange={(value) => setInlineEdit((current) => current ? { ...current, value } : current)}
@@ -386,8 +491,9 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
                 <span>{text.fileManager.emptyHint}</span>
               </div>
             )}
+            {operationProgress && <div className="operation-progress">{operationProgress}</div>}
           </main>
-          {inspectorOpen && <InspectorPanel path={selectedPath} />}
+          {inspectorOpen && <InspectorPanel path={selectedPath} selectedItems={selectedItems} />}
         </div>
       </section>
       {context && <ContextMenu x={context.x} y={context.y} actions={context.actions} onAction={(action) => void runAction(action)} />}

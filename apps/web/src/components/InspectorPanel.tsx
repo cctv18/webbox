@@ -1,20 +1,24 @@
 import { useEffect, useState } from "react";
-import type { ActivityRecord, FileDetails, MemoEntry, PathMetadata } from "@webbox/shared";
+import type { ActivityRecord, FileDetails, FileItem, MemoEntry, PathMetadata } from "@webbox/shared";
 import { client } from "../api/client";
 import { text } from "../i18n";
+import { formatBytesWithExact } from "../utils/format";
 
 interface InspectorPanelProps {
   path: string;
   space?: string;
+  selectedItems?: FileItem[];
 }
 
-export function InspectorPanel({ path, space }: InspectorPanelProps) {
+export function InspectorPanel({ path, space, selectedItems = [] }: InspectorPanelProps) {
   const [tab, setTab] = useState<"properties" | "memos" | "activity">("properties");
   const [details, setDetails] = useState<FileDetails | null>(null);
   const [properties, setProperties] = useState<PathMetadata>({ path, description: "", tags: [] });
   const [memos, setMemos] = useState<MemoEntry[]>([]);
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [memoText, setMemoText] = useState("");
+  const multiSelected = selectedItems.length > 1;
+  const totalSelectedSize = selectedItems.reduce((total, item) => total + (item.kind === "file" ? item.size : 0), 0);
 
   const normalizeProperties = (value: Partial<PathMetadata> | null | undefined): PathMetadata => ({
     path: value?.path ?? path,
@@ -23,11 +27,12 @@ export function InspectorPanel({ path, space }: InspectorPanelProps) {
   });
 
   useEffect(() => {
-    client.details(path, space).then(setDetails).catch(() => setDetails(null));
+    if (multiSelected) setDetails(null);
+    else client.details(path, space).then(setDetails).catch(() => setDetails(null));
     client.properties(path).then((value) => setProperties(normalizeProperties(value))).catch(() => setProperties({ path, description: "", tags: [] }));
     client.memos(path).then(setMemos).catch(() => setMemos([]));
     client.activity(path).then(setActivity).catch(() => setActivity([]));
-  }, [path]);
+  }, [path, multiSelected]);
 
   const saveProperties = async () => {
     setProperties(normalizeProperties(await client.saveProperties(properties)));
@@ -48,13 +53,20 @@ export function InspectorPanel({ path, space }: InspectorPanelProps) {
       <div className="inspector-body">
         {tab === "properties" && (
           <div className="properties-tab">
-            <dl>
-              <dt>{text.fileManager.name}</dt><dd>{details?.name ?? path}</dd>
-              <dt>{text.fileManager.size}</dt><dd>{details?.size ?? "-"}</dd>
-              <dt>{text.fileManager.createdTime}</dt><dd>{details?.createdAt ? new Date(details.createdAt).toLocaleString() : "-"}</dd>
-              <dt>{text.fileManager.modifiedTime}</dt><dd>{details?.modifiedAt ? new Date(details.modifiedAt).toLocaleString() : "-"}</dd>
-              <dt>{text.fileManager.accessedTime}</dt><dd>{details?.accessedAt ? new Date(details.accessedAt).toLocaleString() : "-"}</dd>
-            </dl>
+            {multiSelected ? (
+              <dl>
+                <dt>{text.fileManager.selectedCount}</dt><dd>{selectedItems.length}</dd>
+                <dt>{text.fileManager.size}</dt><dd>{formatBytesWithExact(totalSelectedSize)}</dd>
+              </dl>
+            ) : (
+              <dl>
+                <dt>{text.fileManager.name}</dt><dd>{details?.name ?? path}</dd>
+                <dt>{text.fileManager.size}</dt><dd>{details ? formatBytesWithExact(details.size) : "-"}</dd>
+                <dt>{text.fileManager.createdTime}</dt><dd>{details?.createdAt ? new Date(details.createdAt).toLocaleString() : "-"}</dd>
+                <dt>{text.fileManager.modifiedTime}</dt><dd>{details?.modifiedAt ? new Date(details.modifiedAt).toLocaleString() : "-"}</dd>
+                <dt>{text.fileManager.accessedTime}</dt><dd>{details?.accessedAt ? new Date(details.accessedAt).toLocaleString() : "-"}</dd>
+              </dl>
+            )}
             <label>
               {text.inspector.tags}
               <input value={properties.tags.join(",")} onChange={(event) => setProperties({ ...properties, tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} />

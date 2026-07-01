@@ -22,11 +22,17 @@ export function BottomMenu({ onAdmin, onPlugins, notifications = [], onNotificat
 
   return (
     <div className="bottom-menu">
-      <button title={text.bottomMenu.notificationTitle} aria-label={text.bottomMenu.notifications} type="button" className="icon-button notification-button" onClick={() => setNoticeOpen((value) => !value)}>
+      <button title={text.bottomMenu.notificationTitle} aria-label={text.bottomMenu.notifications} type="button" className="icon-button notification-button" onClick={() => {
+        setNoticeOpen((value) => !value);
+        setOpen(false);
+      }}>
         <Bell size={18} />
         {unread > 0 && <span className="badge">{unread}</span>}
       </button>
-      <button title={text.bottomMenu.openMenuTitle} aria-label={text.bottomMenu.menu} type="button" className="icon-button" onClick={() => setOpen((value) => !value)}>
+      <button title={text.bottomMenu.openMenuTitle} aria-label={text.bottomMenu.menu} type="button" className="icon-button" onClick={() => {
+        setOpen((value) => !value);
+        setNoticeOpen(false);
+      }}>
         <Menu size={18} />
       </button>
       {open && (

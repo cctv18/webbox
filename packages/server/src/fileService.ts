@@ -178,7 +178,9 @@ export class FileService {
       for (const item of paths) {
         const absolute = resolveInsideRoot(this.root, item);
         const name = path.basename(absolute);
-        archive.file(absolute, { name });
+        const stat = fs.statSync(absolute);
+        if (stat.isDirectory()) archive.directory(absolute, name);
+        else archive.file(absolute, { name });
       }
       void archive.finalize();
     });

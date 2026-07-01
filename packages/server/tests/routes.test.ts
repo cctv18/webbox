@@ -92,6 +92,30 @@ describe("server routes", () => {
     expect(JSON.stringify(tree.body.data)).not.toMatch(/[A-Z]:\\\\|本地磁盘|local-root/);
   });
 
+  it("loads configured local network mounts and lists their files through abstract paths", async () => {
+    const mountRoot = path.join(dataRoot, "mounted-data");
+    await fs.mkdir(mountRoot, { recursive: true });
+    await fs.writeFile(path.join(mountRoot, "mounted.txt"), "mounted", "utf8");
+    const configFile = path.join(dataRoot, "server.conf");
+    await fs.writeFile(configFile, `mount.local.docs=${mountRoot}\n`, "utf8");
+
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot, configFile });
+    const tree = await request(app).get("/api/tree").expect(200);
+    expect(JSON.stringify(tree.body.data)).toContain("docs");
+
+    const mounts = await request(app).get("/api/files").query({ path: "/网络挂载" }).expect(200);
+    expect(mounts.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "docs", path: "/网络挂载/docs", kind: "directory" })
+    ]));
+
+    const mountedList = await request(app).get("/api/files").query({ path: "/网络挂载/docs" }).expect(200);
+    expect(mountedList.body.data[0]).toMatchObject({
+      name: "mounted.txt",
+      path: "/网络挂载/docs/mounted.txt",
+      kind: "file"
+    });
+  });
+
   it("supports template creation, favorites, recent searches, and attachment downloads", async () => {
     const app = await createApp({ storageRoot, dataRoot, pluginRoot });
     await request(app).post("/api/files/template").send({ path: "/位置/个人空间/我的文档/readme.md", type: "md" }).expect(200);
@@ -103,6 +127,78 @@ describe("server routes", () => {
     expect(recent.body.data[0].text).toBe("readme");
     const download = await request(app).get("/api/files/download").query({ path: "/位置/个人空间/我的文档/readme.md" }).expect(200);
     expect(download.headers["content-disposition"]).toMatch(/attachment/);
+  });
+
+  it("keeps abstract paths when listing and editing media library folders", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/folder").send({ path: "/位置/个人空间/我的相册/123" }).expect(200);
+    const list = await request(app).get("/api/files").query({ path: "/位置/个人空间/我的相册" }).expect(200);
+    expect(list.body.data[0]).toMatchObject({
+      name: "123",
+      path: "/位置/个人空间/我的相册/123",
+      kind: "directory"
+    });
+
+    await request(app).post("/api/files/rename").send({ path: "/位置/个人空间/我的相册/123", name: "renamed" }).expect(200);
+    const renamed = await request(app).get("/api/files/details").query({ path: "/位置/个人空间/我的相册/renamed" }).expect(200);
+    expect(renamed.body.data.path).toBe("/位置/个人空间/我的相册/renamed");
+
+    await request(app).post("/api/files/recycle").send({ path: "/位置/个人空间/我的相册/renamed" }).expect(200);
+    const afterRecycle = await request(app).get("/api/files").query({ path: "/位置/个人空间/我的相册" }).expect(200);
+    expect(afterRecycle.body.data).toEqual([]);
+  });
+
+  it("shows personal-space shortcut folders and serves virtual favorites and recent documents", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/我的文档/readme.md", content: "hello" }).expect(200);
+    await request(app).post("/api/favorites").send({ path: "/位置/个人空间/我的文档/readme.md", label: "readme.md" }).expect(200);
+
+    const personal = await request(app).get("/api/files").query({ path: "/位置/个人空间" }).expect(200);
+    expect(personal.body.data.map((item: { path: string }) => item.path)).toEqual(expect.arrayContaining([
+      "/位置/个人空间/私密保险箱",
+      "/位置/个人空间/我的相册",
+      "/位置/个人空间/我的文档",
+      "/位置/个人空间/我的音乐",
+      "/位置/个人空间/我的视频"
+    ]));
+
+    const favorites = await request(app).get("/api/files").query({ path: "/位置/收藏夹" }).expect(200);
+    expect(favorites.body.data[0]).toMatchObject({ name: "readme.md", path: "/位置/个人空间/我的文档/readme.md" });
+
+    const recent = await request(app).get("/api/files").query({ path: "/工具/最近文档" }).expect(200);
+    expect(recent.body.data[0]).toMatchObject({ name: "readme.md", path: "/位置/个人空间/我的文档/readme.md" });
+  });
+
+  it("separates browser open from attachment download", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/我的文档/open.txt", content: "inline" }).expect(200);
+    const open = await request(app).get("/api/files/open").query({ path: "/位置/个人空间/我的文档/open.txt" }).expect(200);
+    expect(open.text).toBe("inline");
+    expect(open.headers["content-disposition"] ?? "").not.toMatch(/attachment/);
+
+    const download = await request(app).get("/api/files/download").query({ path: "/位置/个人空间/我的文档/open.txt" }).expect(200);
+    expect(download.headers["content-disposition"]).toMatch(/attachment/);
+  });
+
+  it("zips and unzips files addressed by abstract paths", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/我的文档/a.txt", content: "zip me" }).expect(200);
+    const zipped = await request(app).post("/api/files/zip").send({
+      paths: ["/位置/个人空间/我的文档/a.txt"],
+      target: "/位置/个人空间/我的文档/archive.zip"
+    }).expect(200);
+    expect(zipped.body.data.path).toBe("/位置/个人空间/我的文档/archive.zip");
+
+    await request(app).post("/api/files/unzip").send({
+      path: "/位置/个人空间/我的文档/archive.zip",
+      targetDir: "/位置/个人空间/我的文档/unpacked"
+    }).expect(200);
+    const unpacked = await request(app).get("/api/files/details").query({ path: "/位置/个人空间/我的文档/unpacked/a.txt" }).expect(200);
+    expect(unpacked.body.data.name).toBe("a.txt");
   });
 
   it("returns webbox tree, storage config, notifications, and safe-box routes", async () => {

@@ -1,7 +1,8 @@
 import { File, Folder } from "lucide-react";
-import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import type { FileItem, SortKey, ViewMode } from "@webbox/shared";
 import { text } from "../i18n";
+import { formatBytes } from "../utils/format";
 
 export interface InlineEditState {
   mode: "create-folder" | "create-template" | "rename";
@@ -18,11 +19,21 @@ interface FileGridProps {
   inlineEdit: InlineEditState | null;
   onOpen: (item: FileItem) => void;
   onSelect: (item: FileItem, additive: boolean, range: boolean) => void;
+  onSelectionChange: (paths: string[]) => void;
+  onClearSelection: () => void;
   onContextMenu: (event: MouseEvent, item: FileItem) => void;
   onSort: (key: SortKey) => void;
   onInlineChange: (value: string) => void;
   onInlineCommit: () => void;
   onInlineCancel: () => void;
+}
+
+interface DragSelection {
+  pointerId: number;
+  originX: number;
+  originY: number;
+  currentX: number;
+  currentY: number;
 }
 
 function typeLabel(item: FileItem): string {
@@ -62,15 +73,69 @@ export function FileGrid({
   inlineEdit,
   onOpen,
   onSelect,
+  onSelectionChange,
+  onClearSelection,
   onContextMenu,
   onSort,
   onInlineChange,
   onInlineCommit,
   onInlineCancel
 }: FileGridProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dragSelection, setDragSelection] = useState<DragSelection | null>(null);
+
+  const updateBoxSelection = (next: DragSelection) => {
+    const root = containerRef.current;
+    if (!root) return;
+    const selectionRect = {
+      left: Math.min(next.originX, next.currentX),
+      right: Math.max(next.originX, next.currentX),
+      top: Math.min(next.originY, next.currentY),
+      bottom: Math.max(next.originY, next.currentY)
+    };
+    const selectedPaths = Array.from(root.querySelectorAll<HTMLElement>("[data-file-path]"))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.right >= selectionRect.left && rect.left <= selectionRect.right && rect.bottom >= selectionRect.top && rect.top <= selectionRect.bottom;
+      })
+      .map((element) => element.dataset.filePath)
+      .filter((value): value is string => Boolean(value));
+    onSelectionChange(selectedPaths);
+  };
+
+  const startDragSelection = (event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (event.button !== 0 || target.closest("[data-file-entry], .file-row.header, .inline-name-input")) return;
+    const next = { pointerId: event.pointerId, originX: event.clientX, originY: event.clientY, currentX: event.clientX, currentY: event.clientY };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onClearSelection();
+    setDragSelection(next);
+  };
+
+  const moveDragSelection = (event: PointerEvent<HTMLDivElement>) => {
+    if (!dragSelection || dragSelection.pointerId !== event.pointerId) return;
+    const next = { ...dragSelection, currentX: event.clientX, currentY: event.clientY };
+    setDragSelection(next);
+    updateBoxSelection(next);
+  };
+
+  const stopDragSelection = (event: PointerEvent<HTMLDivElement>) => {
+    if (!dragSelection || dragSelection.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    setDragSelection(null);
+  };
+
+  const selectionBoxStyle = dragSelection ? {
+    left: Math.min(dragSelection.originX, dragSelection.currentX),
+    top: Math.min(dragSelection.originY, dragSelection.currentY),
+    width: Math.abs(dragSelection.currentX - dragSelection.originX),
+    height: Math.abs(dragSelection.currentY - dragSelection.originY)
+  } satisfies CSSProperties : undefined;
+
+  const CreateIcon = inlineEdit?.mode === "create-folder" ? Folder : File;
   const createInput = inlineEdit?.mode.startsWith("create") ? (
     <button className="file-row creating" role="row" type="button">
-      <span><Folder size={16} /><InlineInput value={inlineEdit.value} onInlineChange={onInlineChange} onInlineCommit={onInlineCommit} onInlineCancel={onInlineCancel} /></span>
+      <span><CreateIcon size={16} /><InlineInput value={inlineEdit.value} onInlineChange={onInlineChange} onInlineCommit={onInlineCommit} onInlineCancel={onInlineCancel} /></span>
       <span>{inlineEdit.mode === "create-folder" ? "文件夹" : `${inlineEdit.templateType?.toUpperCase()} 文件`}</span>
       <span>{text.fileManager.directorySize}</span>
       <span>-</span>
@@ -79,10 +144,21 @@ export function FileGrid({
 
   if (viewMode === "grid") {
     return (
-      <div className="file-grid" role="grid" aria-label={text.fileManager.fileList} style={{ "--webbox-icon-size": `${iconSize}px` } as CSSProperties}>
+      <div
+        ref={containerRef}
+        className="file-grid"
+        role="grid"
+        aria-label={text.fileManager.fileList}
+        style={{ "--webbox-icon-size": `${iconSize}px` } as CSSProperties}
+        onPointerDown={startDragSelection}
+        onPointerMove={moveDragSelection}
+        onPointerUp={stopDragSelection}
+        onPointerCancel={stopDragSelection}
+      >
+        {selectionBoxStyle && <div className="selection-box" style={selectionBoxStyle} />}
         {inlineEdit?.mode.startsWith("create") && (
           <button className="file-tile creating" type="button">
-            <Folder size={iconSize} />
+            <CreateIcon size={iconSize} />
             <InlineInput value={inlineEdit.value} onInlineChange={onInlineChange} onInlineCommit={onInlineCommit} onInlineCancel={onInlineCancel} />
           </button>
         )}
@@ -94,6 +170,8 @@ export function FileGrid({
             <button
               key={item.path}
               type="button"
+              data-file-entry
+              data-file-path={item.path}
               className={`file-tile ${active ? "selected" : ""}`}
               onClick={(event) => onSelect(item, event.ctrlKey || event.metaKey, event.shiftKey)}
               onDoubleClick={() => onOpen(item)}
@@ -109,7 +187,17 @@ export function FileGrid({
   }
 
   return (
-    <div className="file-list" role="table" aria-label={text.fileManager.fileList}>
+    <div
+      ref={containerRef}
+      className="file-list"
+      role="table"
+      aria-label={text.fileManager.fileList}
+      onPointerDown={startDragSelection}
+      onPointerMove={moveDragSelection}
+      onPointerUp={stopDragSelection}
+      onPointerCancel={stopDragSelection}
+    >
+      {selectionBoxStyle && <div className="selection-box" style={selectionBoxStyle} />}
       <div className="file-row header" role="row">
         <button type="button" role="columnheader" onClick={() => onSort("name")}>{text.fileManager.name}</button>
         <button type="button" role="columnheader" onClick={() => onSort("type")}>{text.fileManager.type}</button>
@@ -127,13 +215,15 @@ export function FileGrid({
             role="row"
             type="button"
             key={item.path}
+            data-file-entry
+            data-file-path={item.path}
             onClick={(event) => onSelect(item, event.ctrlKey || event.metaKey, event.shiftKey)}
             onDoubleClick={() => onOpen(item)}
             onContextMenu={(event) => onContextMenu(event, item)}
           >
             <span className="file-name-cell"><Icon size={16} />{renaming ? <InlineInput value={inlineEdit.value} onInlineChange={onInlineChange} onInlineCommit={onInlineCommit} onInlineCancel={onInlineCancel} /> : <span>{item.name}</span>}</span>
             <span>{typeLabel(item)}</span>
-            <span>{item.kind === "directory" ? text.fileManager.directorySize : item.size}</span>
+            <span>{item.kind === "directory" ? text.fileManager.directorySize : formatBytes(item.size)}</span>
             <span>{new Date(item.modifiedAt).toLocaleString()}</span>
           </button>
         );

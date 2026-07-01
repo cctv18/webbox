@@ -313,9 +313,18 @@ if (-not [string]::IsNullOrWhiteSpace($logFileValue)) {
 }
 
 Set-Location $ScriptDir
-$nodeArguments = @((Join-Path $ScriptDir "webbox-server.js"))
-& $nodeCommand.Source @nodeArguments
-exit $LASTEXITCODE
+$env:WEBBOX_PARENT_PID = "$PID"
+$nodeProcess = $null
+try {
+  $nodeProcess = Start-Process -FilePath $nodeCommand.Source -ArgumentList @((Join-Path $ScriptDir "webbox-server.js")) -NoNewWindow -PassThru
+  Wait-Process -Id $nodeProcess.Id
+  $nodeProcess.Refresh()
+  exit $nodeProcess.ExitCode
+} finally {
+  if ($null -ne $nodeProcess -and -not $nodeProcess.HasExited) {
+    Stop-Process -Id $nodeProcess.Id -Force -ErrorAction SilentlyContinue
+  }
+}
 `;
   fs.writeFileSync(path.join(outDir, "run-webbox.ps1"), content, "utf8");
 }
@@ -410,7 +419,20 @@ function writeShellLauncher() {
     "fi",
     "",
     "cd \"$SCRIPT_DIR\"",
-    "exec node \"$SCRIPT_DIR/webbox-server.js\"",
+    "export WEBBOX_PARENT_PID=$$",
+    "node \"$SCRIPT_DIR/webbox-server.js\" &",
+    "WEBBOX_NODE_PID=$!",
+    "cleanup() {",
+    "  if kill -0 \"$WEBBOX_NODE_PID\" >/dev/null 2>&1; then",
+    "    kill \"$WEBBOX_NODE_PID\" >/dev/null 2>&1 || true",
+    "    wait \"$WEBBOX_NODE_PID\" >/dev/null 2>&1 || true",
+    "  fi",
+    "}",
+    "trap cleanup INT TERM EXIT",
+    "wait \"$WEBBOX_NODE_PID\"",
+    "status=$?",
+    "trap - INT TERM EXIT",
+    "exit \"$status\"",
     ""
   ].join("\n");
   const launcher = path.join(outDir, "run-webbox.sh");

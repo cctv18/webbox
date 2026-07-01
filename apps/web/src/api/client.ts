@@ -53,7 +53,10 @@ export const client = {
     body.append("file", file);
     return api<{ name: string }>(withSpace(`/api/files/upload?path=${encodeURIComponent(path)}`, space), { method: "POST", body });
   },
+  openUrl: (path: string, space?: string) => withSpace(`/api/files/open?path=${encodeURIComponent(path)}`, space),
   downloadUrl: (path: string, space?: string) => withSpace(`/api/files/download?path=${encodeURIComponent(path)}`, space),
+  zip: (paths: string[], target: string, space?: string) => api<{ path: string }>("/api/files/zip", { method: "POST", body: JSON.stringify({ paths, target, space }) }),
+  unzip: (path: string, targetDir: string, space?: string) => api<{ path: string }>("/api/files/unzip", { method: "POST", body: JSON.stringify({ path, targetDir, space }) }),
   favorites: () => api<FavoriteEntry[]>("/api/favorites"),
   addFavorite: (path: string, label: string) => api<FavoriteEntry>("/api/favorites", { method: "POST", body: JSON.stringify({ path, label }) }),
   removeFavorite: (id: string) => api<{ id: string }>(`/api/favorites/${encodeURIComponent(id)}`, { method: "DELETE" }),

@@ -2,12 +2,14 @@ import type { Express } from "express";
 import multer from "multer";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import mime from "mime-types";
 import { fail, ok, zhCN, type AdminStorageConfig, type FavoriteEntry, type FileItem, type PathMetadata, type RecentSearch, type TemplateFileType } from "@webbox/shared";
 import type { ActivityStore } from "./activityStore.js";
 import { FileService } from "./fileService.js";
 import type { LibraryService } from "./libraryService.js";
 import type { WebboxLogger } from "./logger.js";
 import type { MetadataStore } from "./metadataStore.js";
+import type { MountService } from "./mountService.js";
 import type { NotificationService } from "./notificationService.js";
 import type { PathResolver } from "./pathResolver.js";
 import type { SafeBoxService } from "./safeBoxService.js";
@@ -22,6 +24,8 @@ export interface RouteServices {
   fileSpaces?: Record<string, FileService>;
   library?: LibraryService;
   metadata?: MetadataStore;
+  mountFileSpaces?: Record<string, FileService>;
+  mounts?: MountService;
   notifications?: NotificationService;
   resolver?: PathResolver;
   safeBox?: SafeBoxService;
@@ -63,21 +67,34 @@ function isAbstractPath(value: string): boolean {
   return value.startsWith("/位置") || value.startsWith("/工具") || value.startsWith("/网络挂载");
 }
 
-function resolvedPath(value: string, services: RouteServices): { path: string; service?: FileService; virtual?: string } {
-  if (!isAbstractPath(value)) return { path: value };
-  const resolved = services.resolver?.resolve(value);
-  if (!resolved) throw new Error("INVALID_PATH");
-  if (resolved.kind === "virtual") return { path: resolved.displayPath, virtual: resolved.virtualId };
-  if (resolved.kind === "recycle") return { path: resolved.displayPath, virtual: "recycle" };
-  if (resolved.kind === "mount") throw new Error("INVALID_PATH");
-  const service = services.fileSpaces?.[resolved.space ?? "personal"];
-  if (!service) throw new Error("INVALID_PATH");
-  return { path: resolved.filePath ?? "/", service };
+interface FileTarget {
+  service?: FileService;
+  path: string;
+  displayPath: string;
+  isAbstract: boolean;
+  virtual?: string;
+  space?: string;
 }
 
-function fileServiceForPath(req: { query?: { space?: unknown }; body?: { space?: unknown } }, fallback: FileService, services: RouteServices, value: string): { service: FileService; path: string; virtual?: string } {
+function resolvedPath(value: string, services: RouteServices): FileTarget {
+  if (!isAbstractPath(value)) return { path: value, displayPath: value, isAbstract: false };
+  const resolved = services.resolver?.resolve(value);
+  if (!resolved) throw new Error("INVALID_PATH");
+  if (resolved.kind === "virtual") return { path: resolved.displayPath, displayPath: resolved.displayPath, isAbstract: true, virtual: resolved.virtualId };
+  if (resolved.kind === "recycle") return { path: resolved.displayPath, displayPath: resolved.displayPath, isAbstract: true, virtual: "recycle" };
+  if (resolved.kind === "mount") {
+    const service = services.mountFileSpaces?.[resolved.mountId ?? ""];
+    if (!service) throw new Error("INVALID_PATH");
+    return { path: resolved.filePath ?? "/", displayPath: resolved.displayPath, isAbstract: true, service };
+  }
+  const service = services.fileSpaces?.[resolved.space ?? "personal"];
+  if (!service) throw new Error("INVALID_PATH");
+  return { path: resolved.filePath ?? "/", displayPath: resolved.displayPath, isAbstract: true, service, space: resolved.space };
+}
+
+function fileServiceForPath(req: { query?: { space?: unknown }; body?: { space?: unknown } }, fallback: FileService, services: RouteServices, value: string): FileTarget {
   const resolved = resolvedPath(value, services);
-  return { service: resolved.service ?? serviceFor(req, fallback, services), path: resolved.path, virtual: resolved.virtual };
+  return { ...resolved, service: resolved.service ?? (resolved.virtual ? undefined : serviceFor(req, fallback, services)) };
 }
 
 function templateContent(type: TemplateFileType): Buffer {
@@ -87,6 +104,165 @@ function templateContent(type: TemplateFileType): Buffer {
   return Buffer.from(`Webbox ${type.toUpperCase()} template placeholder\n`, "utf8");
 }
 
+function requireService(target: FileTarget): FileTarget & { service: FileService } {
+  if (!target.service) throw new Error("INVALID_PATH");
+  return target as FileTarget & { service: FileService };
+}
+
+function joinDisplayPath(base: string, suffix: string): string {
+  const normalizedBase = base.replace(/\/$/, "") || "/";
+  const normalizedSuffix = suffix.replace(/^\/+/, "");
+  if (!normalizedSuffix) return normalizedBase;
+  return `${normalizedBase}/${normalizedSuffix}`.replace(/\/+/g, "/");
+}
+
+function relativeVirtualPath(base: string, itemPath: string): string {
+  const normalizedBase = base.replace(/\/$/, "") || "/";
+  const normalizedItem = itemPath.replace(/\/$/, "") || "/";
+  if (normalizedBase === "/") return normalizedItem;
+  if (normalizedItem === normalizedBase) return "/";
+  if (normalizedItem.startsWith(`${normalizedBase}/`)) return normalizedItem.slice(normalizedBase.length);
+  return normalizedItem;
+}
+
+function rebaseItem<T extends FileItem>(item: T, target: FileTarget): T {
+  if (!target.isAbstract) return item;
+  return {
+    ...item,
+    path: joinDisplayPath(target.displayPath, relativeVirtualPath(target.path, item.path))
+  } as T;
+}
+
+function rebaseItems(items: FileItem[], target: FileTarget): FileItem[] {
+  return items.map((item) => rebaseItem(item, target));
+}
+
+function timestamp(): string {
+  return new Date(0).toISOString();
+}
+
+function basenameFromDisplay(displayPath: string): string {
+  return path.posix.basename(displayPath.replace(/\/$/, "")) || displayPath;
+}
+
+function extensionFromDisplay(displayPath: string): string {
+  return path.posix.extname(displayPath).replace(/^\./, "").toLowerCase();
+}
+
+function virtualItem(name: string, displayPath: string, icon = "folder", kind: FileItem["kind"] = "directory"): FileItem {
+  return {
+    name,
+    path: displayPath,
+    kind,
+    size: 0,
+    modifiedAt: timestamp(),
+    createdAt: timestamp(),
+    accessedAt: timestamp(),
+    extension: kind === "file" ? extensionFromDisplay(displayPath) : "",
+    icon
+  };
+}
+
+function personalShortcuts(): FileItem[] {
+  return [
+    virtualItem(zhCN.fileManager.safeBox, "/位置/个人空间/私密保险箱", "safe"),
+    virtualItem(zhCN.fileManager.photos, "/位置/个人空间/我的相册", "image"),
+    virtualItem(zhCN.fileManager.documents, "/位置/个人空间/我的文档", "folder"),
+    virtualItem(zhCN.fileManager.music, "/位置/个人空间/我的音乐", "music"),
+    virtualItem(zhCN.fileManager.videos, "/位置/个人空间/我的视频", "video")
+  ];
+}
+
+function virtualChildren(virtual: string): FileItem[] {
+  if (virtual === "locations") {
+    return [
+      virtualItem(zhCN.fileManager.favorites, "/位置/收藏夹", "treeFav"),
+      virtualItem(zhCN.fileManager.personalSpace, "/位置/个人空间", "folder")
+    ];
+  }
+  if (virtual === "tools") {
+    return [
+      virtualItem(zhCN.fileManager.recentDocuments, "/工具/最近文档", "search"),
+      virtualItem(zhCN.fileManager.safeBox, "/工具/私密保险箱", "safe"),
+      virtualItem(zhCN.fileManager.recycleBin, "/工具/回收站", "recycle")
+    ];
+  }
+  if (virtual === "mounts") {
+    return [virtualItem("新增网络挂载", "/网络挂载/新增网络挂载", "computer")];
+  }
+  return [];
+}
+
+function mountItems(services: RouteServices): FileItem[] {
+  const configured = services.mounts?.list().map((mount) => (
+    virtualItem(mount.name, `/网络挂载/${mount.id}`, mount.type === "local" ? "folder" : "computer")
+  )) ?? [];
+  return [...configured, ...virtualChildren("mounts")];
+}
+
+async function addFavoriteFlags(items: FileItem[], services: RouteServices): Promise<FileItem[]> {
+  const state = await services.metadata?.load();
+  const favorites = new Set(state?.favorites.map((item) => item.path) ?? []);
+  return items.map((item) => ({ ...item, favorite: favorites.has(item.path) }));
+}
+
+async function itemFromDisplayPath(displayPath: string, services: RouteServices, fallback: FileService, label?: string): Promise<FileItem> {
+  try {
+    const target = fileServiceForPath({}, fallback, services, displayPath);
+    if (target.virtual) return virtualItem(label ?? basenameFromDisplay(displayPath), displayPath, target.virtual === "recent" ? "search" : "folder");
+    const concrete = requireService(target);
+    const item = rebaseItem(await concrete.service.details(concrete.path), concrete);
+    return { ...item, name: label ?? item.name, path: displayPath };
+  } catch {
+    const extension = extensionFromDisplay(displayPath);
+    return virtualItem(label ?? basenameFromDisplay(displayPath), displayPath, extension ? "file" : "folder", extension ? "file" : "directory");
+  }
+}
+
+async function listVirtual(virtual: string, files: FileService, services: RouteServices): Promise<FileItem[]> {
+  if (virtual === "favorites") {
+    const state = await services.metadata?.load();
+    const items = await Promise.all((state?.favorites ?? []).map((favorite) => itemFromDisplayPath(favorite.path, services, files, favorite.label)));
+    return addFavoriteFlags(items, services);
+  }
+  if (virtual === "recent") {
+    const records = await services.activity?.query("/") ?? [];
+    const paths = Array.from(new Set(records
+      .filter((record) => record.action.startsWith("file."))
+      .map((record) => record.path)
+      .filter((recordPath) => !recordPath.includes("/回收站"))));
+    const items = await Promise.all(paths.slice(0, 100).map((recordPath) => itemFromDisplayPath(recordPath, services, files)));
+    return addFavoriteFlags(items, services);
+  }
+  if (virtual === "recycle") {
+    return (await files.listRecycle()).map((item) => ({
+      name: item.name,
+      path: item.recycleId,
+      kind: item.kind,
+      size: item.size,
+      modifiedAt: item.deletedAt,
+      createdAt: item.deletedAt,
+      accessedAt: item.deletedAt,
+      extension: item.kind === "file" ? extensionFromDisplay(item.name) : ""
+    }));
+  }
+  if (virtual === "mounts") {
+    return addFavoriteFlags(mountItems(services), services);
+  }
+  return addFavoriteFlags(virtualChildren(virtual), services);
+}
+
+async function listConcrete(target: FileTarget & { service: FileService }, services: RouteServices): Promise<FileItem[]> {
+  const items = rebaseItems(await target.service.list(target.path), target);
+  if (target.displayPath === "/位置/个人空间" && target.path === "/") {
+    const existing = new Set(items.map((item) => item.path));
+    for (const shortcut of personalShortcuts()) {
+      if (!existing.has(shortcut.path)) items.unshift(shortcut);
+    }
+  }
+  return addFavoriteFlags(items, services);
+}
+
 export function mountFileRoutes(app: Express, files: FileService, logger: WebboxLogger, services: RouteServices = {}): void {
   app.get("/api/files", async (req, res) => {
     const requestedPath = String(req.query.path ?? "/");
@@ -94,10 +270,10 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     try {
       const target = fileServiceForPath(req, files, services, requestedPath);
       if (target.virtual) {
-        res.json(ok([] satisfies FileItem[]));
+        res.json(ok(await listVirtual(target.virtual, files, services)));
         return;
       }
-      res.json(ok(await target.service.list(target.path)));
+      res.json(ok(await listConcrete(requireService(target), services)));
     } catch (error) {
       logFailure(logger, "file.list", error, { path: requestedPath });
       res.status(400).json(routeError(error));
@@ -108,7 +284,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const folderPath = String(req.body.path);
     logger.info("file.mkdir", { path: folderPath });
     try {
-      const target = fileServiceForPath(req, files, services, folderPath);
+      const target = requireService(fileServiceForPath(req, files, services, folderPath));
       await target.service.mkdir(target.path);
       await record(services, "file.mkdir", folderPath, "新建文件夹");
       res.json(ok({ path: req.body.path }));
@@ -122,7 +298,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const filePath = String(req.body.path);
     logger.info("file.writeText", { path: filePath });
     try {
-      const target = fileServiceForPath(req, files, services, filePath);
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
       await target.service.writeText(target.path, String(req.body.content ?? ""));
       await record(services, "file.writeText", filePath, "写入文件");
       res.json(ok({ path: req.body.path }));
@@ -138,7 +314,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     logger.info("file.template", { path: filePath, type });
     try {
       if (!["txt", "md", "html", "docx", "xlsx", "pptx"].includes(type)) throw new Error("INVALID_INPUT");
-      const target = fileServiceForPath(req, files, services, filePath);
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
       await target.service.writeBuffer(target.path, templateContent(type));
       await record(services, "file.template", filePath, "新建模板文件");
       res.json(ok({ path: filePath, type }));
@@ -153,7 +329,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const name = String(req.body.name);
     logger.info("file.rename", { path: filePath, name });
     try {
-      const target = fileServiceForPath(req, files, services, filePath);
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
       await target.service.rename(target.path, name);
       await record(services, "file.rename", filePath, "重命名文件");
       res.json(ok({ path: req.body.path, name: req.body.name }));
@@ -168,8 +344,8 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const target = String(req.body.target);
     logger.info("file.copy", { source, target });
     try {
-      const sourceTarget = fileServiceForPath(req, files, services, source);
-      const destinationTarget = fileServiceForPath(req, files, services, target);
+      const sourceTarget = requireService(fileServiceForPath(req, files, services, source));
+      const destinationTarget = requireService(fileServiceForPath(req, files, services, target));
       if (sourceTarget.service !== destinationTarget.service) throw new Error("INVALID_PATH");
       await sourceTarget.service.copy(sourceTarget.path, destinationTarget.path);
       await record(services, "file.copy", target, "复制文件");
@@ -185,8 +361,8 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const target = String(req.body.target);
     logger.info("file.move", { source, target });
     try {
-      const sourceTarget = fileServiceForPath(req, files, services, source);
-      const destinationTarget = fileServiceForPath(req, files, services, target);
+      const sourceTarget = requireService(fileServiceForPath(req, files, services, source));
+      const destinationTarget = requireService(fileServiceForPath(req, files, services, target));
       if (sourceTarget.service !== destinationTarget.service) throw new Error("INVALID_PATH");
       await sourceTarget.service.move(sourceTarget.path, destinationTarget.path);
       await record(services, "file.move", target, "移动文件");
@@ -201,7 +377,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const filePath = String(req.body.path);
     logger.info("file.delete", { path: filePath });
     try {
-      const target = fileServiceForPath(req, files, services, filePath);
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
       await target.service.remove(target.path);
       await record(services, "file.delete", filePath, "删除文件");
       res.json(ok({ path: req.body.path }));
@@ -215,7 +391,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const filePath = String(req.body.path);
     logger.info("file.recycle", { path: filePath });
     try {
-      const target = fileServiceForPath(req, files, services, filePath);
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
       const result = await target.service.recycle(target.path);
       await record(services, "file.recycle", filePath, "删除到回收站");
       await services.notifications?.add({ title: zhCN.fileManager.recycleBin, message: `${filePath} 已移入回收站`, level: "info", targetPath: filePath });
@@ -244,8 +420,8 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const searchPath = String(req.query.path ?? "/");
     logger.info("file.search", { path: searchPath, query });
     try {
-      const target = fileServiceForPath(req, files, services, searchPath);
-      res.json(ok(await target.service.search(query, target.path)));
+      const target = requireService(fileServiceForPath(req, files, services, searchPath));
+      res.json(ok(await addFavoriteFlags(rebaseItems(await target.service.search(query, target.path), target), services)));
     } catch (error) {
       logFailure(logger, "file.search", error, { path: searchPath, query });
       res.status(400).json(routeError(error));
@@ -254,10 +430,15 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
 
   app.post("/api/files/zip", async (req, res) => {
     const target = String(req.body.target);
-    const activeFiles = serviceFor(req, files, services);
-    logger.info("file.zip", { target, count: Array.isArray(req.body.paths) ? req.body.paths.length : 0 });
+    const inputPaths = Array.isArray(req.body.paths) ? req.body.paths.map(String) : [];
+    logger.info("file.zip", { target, count: inputPaths.length });
     try {
-      res.json(ok(await activeFiles.zip(req.body.paths ?? [], target)));
+      const archiveTarget = requireService(fileServiceForPath(req, files, services, target));
+      const sourceTargets = inputPaths.map((inputPath) => requireService(fileServiceForPath(req, files, services, inputPath)));
+      if (sourceTargets.some((source) => source.service !== archiveTarget.service)) throw new Error("INVALID_PATH");
+      await archiveTarget.service.zip(sourceTargets.map((source) => source.path), archiveTarget.path);
+      await record(services, "file.zip", target, "创建压缩包");
+      res.json(ok({ path: archiveTarget.displayPath }));
     } catch (error) {
       logFailure(logger, "file.zip", error, { target });
       res.status(400).json(routeError(error));
@@ -267,10 +448,14 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
   app.post("/api/files/unzip", async (req, res) => {
     const filePath = String(req.body.path);
     const targetDir = String(req.body.targetDir);
-    const activeFiles = serviceFor(req, files, services);
     logger.info("file.unzip", { path: filePath, targetDir });
     try {
-      res.json(ok(await activeFiles.unzip(filePath, targetDir)));
+      const sourceTarget = requireService(fileServiceForPath(req, files, services, filePath));
+      const destinationTarget = requireService(fileServiceForPath(req, files, services, targetDir));
+      if (sourceTarget.service !== destinationTarget.service) throw new Error("INVALID_PATH");
+      await sourceTarget.service.unzip(sourceTarget.path, destinationTarget.path);
+      await record(services, "file.unzip", targetDir, "解压文件");
+      res.json(ok({ path: destinationTarget.displayPath }));
     } catch (error) {
       logFailure(logger, "file.unzip", error, { path: filePath, targetDir });
       res.status(400).json(routeError(error));
@@ -282,7 +467,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     logger.info("file.upload", { path: dir, name: req.file?.originalname });
     try {
       if (!req.file) throw new Error("INVALID_INPUT");
-      const target = fileServiceForPath(req, files, services, dir);
+      const target = requireService(fileServiceForPath(req, files, services, dir));
       await target.service.writeBuffer(path.posix.join(target.path, req.file.originalname), req.file.buffer);
       await record(services, "file.upload", path.posix.join(dir.replace(/\\/g, "/"), req.file.originalname), "上传文件");
       await services.notifications?.add({ title: zhCN.fileManager.uploadDone, message: req.file.originalname, level: "success", targetPath: dir });
@@ -297,7 +482,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     const filePath = String(req.query.path ?? "/");
     logger.info("file.download", { path: filePath });
     try {
-      const target = fileServiceForPath(req, files, services, filePath);
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
       const absolute = target.service.getAbsolutePath(target.path);
       res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(absolute))}`);
       res.sendFile(absolute);
@@ -307,12 +492,33 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     }
   });
 
+  app.get("/api/files/open", async (req, res) => {
+    const filePath = String(req.query.path ?? "/");
+    logger.info("file.open", { path: filePath });
+    try {
+      const target = requireService(fileServiceForPath(req, files, services, filePath));
+      const absolute = target.service.getAbsolutePath(target.path);
+      const contentType = mime.lookup(absolute) || "application/octet-stream";
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(path.basename(absolute))}`);
+      res.sendFile(absolute);
+    } catch (error) {
+      logFailure(logger, "file.open", error, { path: filePath });
+      res.status(400).json(routeError(error));
+    }
+  });
+
   app.get("/api/files/details", async (req, res) => {
     const filePath = String(req.query.path ?? "/");
     logger.info("file.details", { path: filePath });
     try {
       const target = fileServiceForPath(req, files, services, filePath);
-      const details = await target.service.details(target.path);
+      if (target.virtual) {
+        res.json(ok({ ...virtualItem(basenameFromDisplay(target.displayPath), target.displayPath), tags: [], description: "" }));
+        return;
+      }
+      const concrete = requireService(target);
+      const details = rebaseItem(await concrete.service.details(concrete.path), concrete);
       const state = await services.metadata?.load();
       const metadata = state?.pathMetadata[filePath];
       if (metadata) {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { zhCN } from "@webbox/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../src/App";
@@ -57,8 +57,68 @@ describe("Webbox UI", () => {
     expect(screen.getByRole("button", { name: "后退" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "前进" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "新建文件夹" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "上传文件夹" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开上传菜单" }));
+    expect(screen.getByRole("menuitem", { name: "上传文件夹" })).toBeInTheDocument();
     expect(screen.getByText("类型")).toBeInTheDocument();
+  });
+
+  it("groups upload, new-file, sort, and icon-size controls behind toolbar menus", async () => {
+    render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: "上传文件夹" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开上传菜单" }));
+    expect(screen.getByRole("menuitem", { name: "上传文件夹" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "新建文件" }));
+    expect(screen.getByRole("menuitem", { name: "MD 文件" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "PPTX 文件" })).toBeInTheDocument();
+
+    expect(screen.queryByLabelText("图标大小")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "调整图标大小" }));
+    expect(screen.getByLabelText("图标大小")).toHaveAttribute("aria-orientation", "vertical");
+
+    expect(screen.queryByRole("combobox", { name: "排序方式" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "排序" }));
+    expect(screen.getByRole("menuitem", { name: "名称" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "类型" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "大小" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "修改时间" })).toBeInTheDocument();
+  });
+
+  it("opens files with the browser open route and clears selection on empty surface click", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/files?")) {
+        return {
+          json: async () => ({ ok: true, data: [
+            { name: "readme.md", path: "/位置/个人空间/我的文档/readme.md", kind: "file", size: 1234, modifiedAt: "2026-01-01T00:00:00.000Z", extension: "md" }
+          ] })
+        };
+      }
+      return { json: async () => ({ ok: true, data: [] }) };
+    }));
+
+    const { container } = render(<AppShell bootstrap={bootstrap} />);
+    const row = await screen.findByRole("row", { name: /readme\.md/ });
+    fireEvent.click(row);
+    expect(row).toHaveClass("selected");
+
+    fireEvent.doubleClick(row);
+    expect(open).toHaveBeenCalledWith("/api/files/open?path=%2F%E4%BD%8D%E7%BD%AE%2F%E4%B8%AA%E4%BA%BA%E7%A9%BA%E9%97%B4%2F%E6%88%91%E7%9A%84%E6%96%87%E6%A1%A3%2Freadme.md", "_blank", "noopener");
+
+    fireEvent.pointerDown(container.querySelector(".file-surface")!);
+    await waitFor(() => expect(row).not.toHaveClass("selected"));
+  });
+
+  it("expands the file surface when the inspector panel is hidden", async () => {
+    const { container } = render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /隐藏属性/ }));
+    expect(container.querySelector(".content")).toHaveClass("inspector-closed");
+    expect(container.querySelector(".inspector-panel")).not.toBeInTheDocument();
   });
 
   it("uses an input search flow instead of a prompt dialog", async () => {

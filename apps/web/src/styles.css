@@ -948,3 +948,126 @@ body,
 .notification-panel button {
   width: 100%;
 }
+
+.toolbar {
+  overflow: visible;
+}
+
+.toolbar button,
+.topbar button {
+  height: 32px;
+  min-height: 32px;
+  align-items: center;
+}
+
+.toolbar-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.toolbar-group > button:first-child:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.toolbar-arrow {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.toolbar-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 45;
+  min-width: 150px;
+  display: grid;
+  gap: 0;
+  padding: 4px 0;
+  border: 1px solid #b8c6cf;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgb(31 45 61 / 16%);
+}
+
+.toolbar-menu button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #ffffff;
+}
+
+.toolbar-menu button:hover {
+  background: #e8f4ff;
+}
+
+.icon-size-popover {
+  min-width: 48px;
+  place-items: center;
+  padding: 10px 6px;
+}
+
+.vertical-range {
+  width: 24px;
+  height: 130px;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+
+.content.inspector-closed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.file-surface {
+  position: relative;
+}
+
+.selection-box {
+  position: fixed;
+  z-index: 35;
+  pointer-events: none;
+  border: 1px solid #3f8fce;
+  background: rgb(63 143 206 / 16%);
+}
+
+.operation-progress {
+  position: sticky;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 8px;
+  padding: 7px 10px;
+  border: 1px solid #9ec4e2;
+  background: #eef8ff;
+  color: #245978;
+  font-size: 13px;
+  box-shadow: 0 -2px 10px rgb(31 45 61 / 8%);
+}
+
+.toast {
+  min-height: 26px;
+  padding: 4px 10px;
+  line-height: 18px;
+  font-size: 13px;
+}
+
+.context-menu {
+  gap: 0;
+  padding: 4px 0;
+  border-radius: 2px;
+}
+
+.context-menu button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #ffffff;
+}

@@ -19,6 +19,7 @@ import { WatchService } from "./watchService.js";
 import { WorkspaceService } from "./workspaceService.js";
 import { PathResolver } from "./pathResolver.js";
 import { SettingsStore } from "./settingsStore.js";
+import { MountService } from "./mountService.js";
 import { createLogger, requestLogger, type WebboxLogger } from "./logger.js";
 
 export interface CreateAppOptions extends Partial<WebboxConfig> {
@@ -54,6 +55,8 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
   });
   await library.ensureAll();
   const storage = library.getConfig();
+  const mounts = new MountService(conf, path.dirname(config.configFile ?? config.dataRoot));
+  await mounts.ensureLocalRoots();
   const files = new FileService(storage.personal, config.dataRoot);
   const fileSpaces = {
     personal: files,
@@ -63,10 +66,11 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
     videos: new FileService(storage.videos, config.dataRoot),
     safe: new FileService(storage.safeBox, config.dataRoot)
   };
+  const mountFileSpaces = Object.fromEntries(Object.entries(mounts.localRoots()).map(([id, root]) => [id, new FileService(root, config.dataRoot)]));
   const activity = new ActivityStore(path.join(config.dataRoot, "activity.json"));
   const notifications = new NotificationService(metadata);
   const safeBox = new SafeBoxService(metadata, storage.safeBox);
-  const workspace = new WorkspaceService(storage, safeBox);
+  const workspace = new WorkspaceService(storage, safeBox, mounts.list());
   const resolver = new PathResolver();
   const settings = new SettingsStore(config.dataRoot);
   const watcher = new WatchService([storage.personal, storage.photos, storage.documents, storage.music, storage.videos, storage.safeBox], logger, async (event) => {
@@ -106,7 +110,7 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
     }));
   });
 
-  mountFileRoutes(app, files, logger, { activity, fileSpaces, library, metadata, notifications, resolver, safeBox, settings, watcher, workspace });
+  mountFileRoutes(app, files, logger, { activity, fileSpaces, library, metadata, mountFileSpaces, mounts, notifications, resolver, safeBox, settings, watcher, workspace });
   mountPluginRoutes(app, config.pluginRoot, metadata, logger);
 
   app.use(express.static(config.webDist, { fallthrough: true }));
