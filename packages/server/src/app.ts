@@ -110,7 +110,7 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
     }));
   });
 
-  mountFileRoutes(app, files, logger, { activity, fileSpaces, library, metadata, mountFileSpaces, mounts, notifications, resolver, safeBox, settings, watcher, workspace });
+  mountFileRoutes(app, files, logger, { activity, dataRoot: config.dataRoot, fileSpaces, library, metadata, mountFileSpaces, mounts, notifications, resolver, safeBox, settings, watcher, workspace });
   mountPluginRoutes(app, config.pluginRoot, metadata, logger);
 
   app.use(express.static(config.webDist, { fallthrough: true }));

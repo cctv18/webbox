@@ -21,6 +21,8 @@ export interface ExplorerPreferences {
   searchHistoryLimit: number;
   currentPath: string;
   expandedTreeIds: string[];
+  historyBack: string[];
+  historyForward: string[];
 }
 
 export interface WebboxSettings {
@@ -115,6 +117,7 @@ export interface SafeBoxStatus {
   state: SafeBoxState;
   message: string;
   path: string;
+  cooldownSeconds?: number;
 }
 
 export interface NotificationItem {
@@ -150,6 +153,22 @@ export interface MemoEntry {
   createdAt: string;
   updatedAt: string;
   attachments: MemoAttachment[];
+}
+
+export interface MemoDraft {
+  id: string;
+  path: string;
+  content: string;
+  updatedAt: string;
+}
+
+export interface MemoUpload {
+  id: string;
+  name: string;
+  url: string;
+  downloadUrl: string;
+  markdown: string;
+  size: number;
 }
 
 export interface PathMetadata {

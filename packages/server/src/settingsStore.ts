@@ -11,7 +11,9 @@ export const defaultSettings: WebboxSettings = {
     sort: { key: "name", direction: "asc" },
     searchHistoryLimit: 10,
     currentPath: "/位置/个人空间",
-    expandedTreeIds: ["locations", "personal", "tools", "mounts"]
+    expandedTreeIds: ["locations", "personal", "tools", "mounts"],
+    historyBack: [],
+    historyForward: []
   },
   upload: {
     chunkSizeMb: 8,

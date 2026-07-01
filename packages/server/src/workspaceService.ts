@@ -44,6 +44,7 @@ export class WorkspaceService {
         children: [
           { id: "recent", label: zhCN.fileManager.recentDocuments, section: "tools", kind: "virtual", path: "/工具/最近文档", icon: "search" },
           { id: "safe", label: zhCN.fileManager.safeBox, section: "tools", kind: "directory", path: "/工具/私密保险箱", icon: "safe", locked: safe.state !== "unlocked" },
+          { id: "memos", label: "备忘录", section: "tools", kind: "virtual", path: "/工具/备忘录", icon: "memo" },
           { id: "recycle", label: zhCN.fileManager.recycleBin, section: "tools", kind: "virtual", path: "/工具/回收站", icon: "recycle" }
         ]
       },

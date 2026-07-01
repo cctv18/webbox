@@ -463,6 +463,9 @@ button {
 }
 
 .inspector-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
   overflow: auto;
   padding: 10px;
@@ -471,6 +474,8 @@ button {
 .properties-tab,
 .memo-tab,
 .activity-tab {
+  flex: 1;
+  min-height: 0;
   display: grid;
   gap: 10px;
 }
@@ -946,8 +951,15 @@ body,
 }
 
 .activity-tab {
-  max-height: 360px;
+  align-content: start;
+  height: 100%;
   overflow: auto;
+}
+
+.sort-arrow {
+  margin-left: 4px;
+  color: #1677c8;
+  font-size: 12px;
 }
 
 .notification-panel {
@@ -1249,7 +1261,7 @@ body,
 .path-dialog footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1279,15 +1291,14 @@ body,
   padding: 4px;
 }
 
-.path-dialog-tree button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  padding: 6px;
-  text-align: left;
+.path-dialog-tree .navigation-tree {
+  height: auto;
+  min-height: 0;
+}
+
+.path-dialog-tree .tree-label,
+.path-dialog-tree .tree-expander {
+  box-shadow: none;
 }
 
 .context-menu {
@@ -1303,4 +1314,86 @@ body,
   border-radius: 0;
   box-shadow: none;
   background: #ffffff;
+}
+
+.memo-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.memo-workspace-editor,
+.memo-workspace-list {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+.memo-bind-path {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.memo-bind-path input,
+.memo-workspace-textarea {
+  width: 100%;
+  border: 1px solid #cbd6dc;
+  padding: 8px;
+  font: inherit;
+}
+
+.memo-workspace-textarea {
+  flex: 1;
+  min-height: 280px;
+  resize: none;
+}
+
+.memo-workspace-editor footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.memo-workspace-list h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.memo-workspace-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  border: 1px solid #edf1f3;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.memo-workspace-list article.active {
+  border-color: #72b7ff;
+  background: #eef7ff;
+}
+
+.memo-workspace-list article > button:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  box-shadow: none;
+}
+
+.memo-workspace-list span,
+.memo-workspace-list time {
+  color: #687986;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }

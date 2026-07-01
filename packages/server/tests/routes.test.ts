@@ -235,6 +235,69 @@ describe("server routes", () => {
     expect(unpacked.body.data.name).toBe("a.txt");
   });
 
+  it("auto-renames conflicting copy, move, restore, zip, and unzip targets", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/a.txt", content: "one" }).expect(200);
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/b.txt", content: "two" }).expect(200);
+
+    const copied = await request(app).post("/api/files/copy").send({
+      source: "/位置/个人空间/a.txt",
+      target: "/位置/个人空间/b.txt"
+    }).expect(200);
+    expect(copied.body.data.target).toBe("/位置/个人空间/b（2）.txt");
+
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/c.txt", content: "three" }).expect(200);
+    const moved = await request(app).post("/api/files/move").send({
+      source: "/位置/个人空间/c.txt",
+      target: "/位置/个人空间/b.txt"
+    }).expect(200);
+    expect(moved.body.data.target).toBe("/位置/个人空间/b（3）.txt");
+
+    const recycled = await request(app).post("/api/files/recycle").send({ path: "/位置/个人空间/a.txt" }).expect(200);
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/a.txt", content: "new" }).expect(200);
+    const restored = await request(app).post("/api/files/restore").send({ recycleId: recycled.body.data.recycleId }).expect(200);
+    expect(restored.body.data.path).toBe("/a（2）.txt");
+
+    const zipped = await request(app).post("/api/files/zip").send({
+      paths: ["/位置/个人空间/b.txt"],
+      target: "/位置/个人空间/b.txt"
+    }).expect(200);
+    expect(zipped.body.data.path).toBe("/位置/个人空间/b（4）.txt");
+  });
+
+  it("stores memo uploads as files and serves them for inline view or download", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    const uploaded = await request(app)
+      .post("/api/metadata/attachments")
+      .attach("file", Buffer.from("image-bytes"), { filename: "note.png", contentType: "image/png" })
+      .expect(200);
+    expect(uploaded.body.data.url).toMatch(/^\/api\/metadata\/attachments\//);
+    expect(uploaded.body.data.markdown).toBe(`![note.png](${uploaded.body.data.url})`);
+
+    const inline = await request(app).get(uploaded.body.data.url).expect(200);
+    expect(inline.headers["content-disposition"] ?? "").not.toMatch(/attachment/);
+
+    const download = await request(app).get(`${uploaded.body.data.url}?download=1`).expect(200);
+    expect(download.headers["content-disposition"]).toMatch(/attachment/);
+  });
+
+  it("persists explorer history stacks in settings", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+    await request(app).put("/api/settings").send({
+      explorer: {
+        currentPath: "/位置/个人空间/我的文档",
+        historyBack: ["/位置/个人空间", "/位置/个人空间/我的相册"],
+        historyForward: ["/位置/个人空间/我的音乐"]
+      }
+    }).expect(200);
+
+    const settings = await request(app).get("/api/settings").expect(200);
+    expect(settings.body.data.explorer.historyBack).toEqual(["/位置/个人空间", "/位置/个人空间/我的相册"]);
+    expect(settings.body.data.explorer.historyForward).toEqual(["/位置/个人空间/我的音乐"]);
+  });
+
   it("returns webbox tree, storage config, notifications, and safe-box routes", async () => {
     const app = await createApp({ storageRoot, dataRoot, pluginRoot });
     const bootstrap = await request(app).get("/api/bootstrap").expect(200);
@@ -266,6 +329,10 @@ describe("server routes", () => {
     await request(app).post("/api/metadata/memos").send({ path: "/docs", content: "memo **markdown** 😀" }).expect(200);
     const memos = await request(app).get("/api/metadata/memos").query({ path: "/docs" }).expect(200);
     expect(memos.body.data[0].content).toContain("markdown");
+
+    await request(app).put(`/api/metadata/memos/${memos.body.data[0].id}/draft`).send({ path: "/docs", content: "draft" }).expect(200);
+    const draft = await request(app).get(`/api/metadata/memos/${memos.body.data[0].id}/draft`).expect(200);
+    expect(draft.body.data.content).toBe("draft");
 
     const activity = await request(app).get("/api/metadata/activity").query({ path: "/docs" }).expect(200);
     expect(activity.body.data.some((item: { path: string }) => item.path === "/docs/a.txt")).toBe(true);

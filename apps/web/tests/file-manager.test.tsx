@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { zhCN } from "@webbox/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../src/App";
@@ -209,5 +209,59 @@ describe("Webbox UI", () => {
     expect(screen.getByRole("button", { name: "插入附件" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Markdown 预览" }));
     expect(screen.getByLabelText("Markdown 预览区")).toBeInTheDocument();
+  });
+
+  it("uploads memo images instead of inserting base64 data urls", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/metadata/attachments")) {
+        return { json: async () => ({ ok: true, data: { markdown: "![big.png](/api/metadata/attachments/a/big.png)", url: "/api/metadata/attachments/a/big.png" } }) };
+      }
+      return { json: async () => ({ ok: true, data: [] }) };
+    }));
+    render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: text.inspector.memos }));
+    const input = document.querySelector('input[type="file"][accept="image/*"]') as HTMLInputElement;
+    const file = new File(["large-image"], "big.png", { type: "image/png" });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect((screen.getByPlaceholderText(text.inspector.memoPlaceholder) as HTMLTextAreaElement).value).toContain("/api/metadata/attachments/a/big.png"));
+    expect((screen.getByPlaceholderText(text.inspector.memoPlaceholder) as HTMLTextAreaElement).value).not.toContain("data:image");
+  });
+
+  it("disables memo tab for multi-selection and shows sort arrows on list headers", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/files?")) {
+        return { json: async () => ({ ok: true, data: [
+          { name: "a.txt", path: "/位置/个人空间/a.txt", kind: "file", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", extension: "txt" },
+          { name: "b.txt", path: "/位置/个人空间/b.txt", kind: "file", size: 2, modifiedAt: "2026-01-02T00:00:00.000Z", extension: "txt" }
+        ] }) };
+      }
+      if (url.includes("/api/files/details")) {
+        return { json: async () => ({ ok: true, data: { name: "x", path: "/x", kind: "file", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", extension: "txt", tags: [] } }) };
+      }
+      return { json: async () => ({ ok: true, data: [] }) };
+    }));
+    render(<AppShell bootstrap={bootstrap} />);
+    const first = await screen.findByRole("row", { name: /a\.txt/ });
+    const second = await screen.findByRole("row", { name: /b\.txt/ });
+    fireEvent.click(first);
+    fireEvent.click(second, { ctrlKey: true });
+    expect(screen.getByRole("tab", { name: text.inspector.memos })).toBeDisabled();
+    expect(screen.getByRole("columnheader", { name: /名称.*↑/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("columnheader", { name: /大小/ }));
+    expect(screen.getByRole("columnheader", { name: /大小.*↑/ })).toBeInTheDocument();
+  });
+
+  it("opens a folder context menu on empty file surface", async () => {
+    const { container } = render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.contextMenu(container.querySelector(".file-surface")!);
+    const menu = within(container.querySelector(".context-menu")!);
+    expect(menu.getByRole("button", { name: text.fileManager.refresh })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: text.fileManager.newFolder })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: text.fileManager.newFile })).toBeInTheDocument();
+    expect(menu.getByRole("button", { name: text.contextMenu.actions.properties })).toBeInTheDocument();
   });
 });

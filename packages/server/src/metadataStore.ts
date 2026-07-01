@@ -13,11 +13,14 @@ export interface WebboxMetadata {
   recentSearches: RecentSearch[];
   pathMetadata: Record<string, PathMetadata>;
   memos: MemoEntry[];
+  memoDrafts: Record<string, { id: string; path: string; content: string; updatedAt: string }>;
   activity: ActivityRecord[];
   notificationItems: NotificationItem[];
   safeBox?: {
     passwordHash: string;
     salt: string;
+    failedAttempts?: number;
+    cooldownUntil?: string;
   };
 }
 
@@ -32,6 +35,7 @@ const defaultMetadata: WebboxMetadata = {
   recentSearches: [],
   pathMetadata: {},
   memos: [],
+  memoDrafts: {},
   activity: [],
   notificationItems: []
 };

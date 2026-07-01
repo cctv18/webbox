@@ -151,8 +151,11 @@ export const zhCN = {
       invalidInput: "输入无效",
       pathNotFound: "路径不存在",
       duplicateName: "目标已存在",
+      invalidName: "文件名输入无效",
+      createFailed: "创建失败，请检查存储权限",
       targetNotEmpty: "目标目录存在文件，请手工清理",
       safeBoxLocked: "请先解锁私密保险箱",
+      safeBoxCooldown: "密码冷却中，请稍后重试",
       routeNotFound: "路由不存在"
     },
     logs: {

@@ -1,6 +1,6 @@
 import { File, Folder } from "lucide-react";
 import { useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
-import type { FileItem, SortKey, ViewMode } from "@webbox/shared";
+import type { FileItem, SortKey, SortState, ViewMode } from "@webbox/shared";
 import { text } from "../i18n";
 import { formatBytes } from "../utils/format";
 
@@ -16,6 +16,7 @@ interface FileGridProps {
   selected: string[];
   viewMode: ViewMode;
   iconSize: number;
+  sort: SortState;
   inlineEdit: InlineEditState | null;
   onOpen: (item: FileItem) => void;
   onSelect: (item: FileItem, additive: boolean, range: boolean) => void;
@@ -70,6 +71,7 @@ export function FileGrid({
   selected,
   viewMode,
   iconSize,
+  sort,
   inlineEdit,
   onOpen,
   onSelect,
@@ -199,10 +201,10 @@ export function FileGrid({
     >
       {selectionBoxStyle && <div className="selection-box" style={selectionBoxStyle} />}
       <div className="file-row header" role="row">
-        <button type="button" role="columnheader" onClick={() => onSort("name")}>{text.fileManager.name}</button>
-        <button type="button" role="columnheader" onClick={() => onSort("type")}>{text.fileManager.type}</button>
-        <button type="button" role="columnheader" onClick={() => onSort("size")}>{text.fileManager.size}</button>
-        <button type="button" role="columnheader" onClick={() => onSort("modifiedAt")}>{text.fileManager.modifiedTime}</button>
+        <SortHeader sort={sort} sortKey="name" label={text.fileManager.name} onSort={onSort} />
+        <SortHeader sort={sort} sortKey="type" label={text.fileManager.type} onSort={onSort} />
+        <SortHeader sort={sort} sortKey="size" label={text.fileManager.size} onSort={onSort} />
+        <SortHeader sort={sort} sortKey="modifiedAt" label={text.fileManager.modifiedTime} onSort={onSort} />
       </div>
       {createInput}
       {items.map((item) => {
@@ -229,5 +231,14 @@ export function FileGrid({
         );
       })}
     </div>
+  );
+}
+
+function SortHeader({ sort, sortKey, label, onSort }: { sort: SortState; sortKey: SortKey; label: string; onSort: (key: SortKey) => void }) {
+  const active = sort.key === sortKey;
+  return (
+    <button type="button" role="columnheader" aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"} onClick={() => onSort(sortKey)}>
+      {label}{active && <span className="sort-arrow">{sort.direction === "asc" ? "↑" : "↓"}</span>}
+    </button>
   );
 }

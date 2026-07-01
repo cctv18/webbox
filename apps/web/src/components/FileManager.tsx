@@ -7,6 +7,7 @@ import { BottomMenu } from "./BottomMenu";
 import { ContextMenu, type ContextAction } from "./ContextMenu";
 import { FileGrid, type InlineEditState } from "./FileGrid";
 import { InspectorPanel } from "./InspectorPanel";
+import { MemoWorkspace } from "./MemoWorkspace";
 import { NavigationTree } from "./NavigationTree";
 import { PathActionDialog } from "./PathActionDialog";
 import { SafeBoxDialog } from "./SafeBoxDialog";
@@ -42,6 +43,20 @@ function dirname(value: string): string {
   const parts = value.split("/").filter(Boolean);
   parts.pop();
   return parts.join("/");
+}
+
+function isSafeBoxPath(value: string): boolean {
+  return value === "/工具/私密保险箱" || value.startsWith("/工具/私密保险箱/") || value === "/位置/个人空间/私密保险箱" || value.startsWith("/位置/个人空间/私密保险箱/");
+}
+
+function uniqueName(base: string, existingNames: Set<string>): string {
+  if (!existingNames.has(base)) return base;
+  const dot = base.lastIndexOf(".");
+  const stem = dot > 0 ? base.slice(0, dot) : base;
+  const ext = dot > 0 ? base.slice(dot) : "";
+  let index = 2;
+  while (existingNames.has(`${stem}（${index}）${ext}`)) index += 1;
+  return `${stem}（${index}）${ext}`;
 }
 
 const templateLabels: Record<TemplateFileType, string> = {
@@ -86,6 +101,7 @@ function defaultTree(): TreeNode[] {
     { id: "tools", label: "工具", section: "tools", kind: "virtual", path: "/工具", icon: "setting", children: [
       { id: "recent", label: "最近文档", section: "tools", kind: "virtual", path: "/工具/最近文档", icon: "search" },
       { id: "safe", label: "私密保险箱", section: "tools", kind: "directory", path: "/工具/私密保险箱", icon: "safe" },
+      { id: "memos", label: "备忘录", section: "tools", kind: "virtual", path: "/工具/备忘录", icon: "memo" },
       { id: "recycle", label: "回收站", section: "tools", kind: "virtual", path: "/工具/回收站", icon: "recycle" }
     ] },
     { id: "mounts", label: "网络挂载", section: "mounts", kind: "virtual", path: "/网络挂载", icon: "computer", children: [
@@ -114,6 +130,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([...(bootstrap.notifications ?? [])]);
   const [safeStatus, setSafeStatus] = useState<SafeBoxStatus | null>(null);
   const [safeDialogOpen, setSafeDialogOpen] = useState(false);
+  const [pendingSafePath, setPendingSafePath] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [pathEditing, setPathEditing] = useState(false);
   const [pathDraft, setPathDraft] = useState(path);
@@ -160,6 +177,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setIconSize(settings.explorer.iconSize);
       setSort(settings.explorer.sort);
       setExpandedTreeIds(settings.explorer.expandedTreeIds);
+      setHistory(settings.explorer.historyBack ?? []);
+      setFuture(settings.explorer.historyForward ?? []);
       if (settings.explorer.currentPath) setPath(settings.explorer.currentPath);
       setExplorerSettings(settings.explorer);
     }).catch(() => undefined);
@@ -168,8 +187,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   useEffect(() => {
     if (!explorerSettings) return;
-    void client.saveSettings({ explorer: { ...explorerSettings, viewMode, iconSize, sort, currentPath: path, expandedTreeIds } }).catch(() => undefined);
-  }, [viewMode, iconSize, sort, path, expandedTreeIds]);
+    void client.saveSettings({ explorer: { ...explorerSettings, viewMode, iconSize, sort, currentPath: path, expandedTreeIds, historyBack: history, historyForward: future } }).catch(() => undefined);
+  }, [viewMode, iconSize, sort, path, expandedTreeIds, history, future]);
 
   useEffect(() => {
     if (!toast) return;
@@ -196,6 +215,15 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   const navigate = async (nextPath: string, nodeId?: string) => {
     if (nextPath === path) return;
+    if (isSafeBoxPath(nextPath)) {
+      const status = await client.safeStatus();
+      setSafeStatus(status);
+      if (status.state !== "unlocked") {
+        setPendingSafePath(nextPath);
+        setSafeDialogOpen(true);
+        return;
+      }
+    }
     setHistory((current) => [...current, path]);
     setFuture([]);
     setActiveNode(nodeId ?? nextPath);
@@ -214,20 +242,41 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
     await navigate(node.path, node.id);
   };
 
-  const goBack = () => {
-    const previous = history.at(-1);
-    if (!previous) return;
-    setHistory((current) => current.slice(0, -1));
-    setFuture((current) => [path, ...current]);
-    setPath(previous);
+  const pathExists = async (candidate: string) => {
+    try {
+      await client.list(candidate);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  const goForward = () => {
-    const next = future[0];
-    if (!next) return;
-    setFuture((current) => current.slice(1));
-    setHistory((current) => [...current, path]);
-    setPath(next);
+  const goBack = async () => {
+    const stack = [...history];
+    while (stack.length) {
+      const previous = stack.pop()!;
+      if (await pathExists(previous)) {
+        setHistory(stack);
+        setFuture((current) => [path, ...current]);
+        setPath(previous);
+        return;
+      }
+    }
+    setHistory([]);
+  };
+
+  const goForward = async () => {
+    const stack = [...future];
+    while (stack.length) {
+      const next = stack.shift()!;
+      if (await pathExists(next)) {
+        setFuture(stack);
+        setHistory((current) => [...current, path]);
+        setPath(next);
+        return;
+      }
+    }
+    setFuture([]);
   };
 
   const selectItem = (item: FileItem, additive: boolean, range: boolean) => {
@@ -280,13 +329,46 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setInlineEdit(null);
       await load();
     } catch (err) {
-      showToast(err instanceof Error && err.message === "输入无效" ? "文件名输入无效" : err instanceof Error ? err.message : String(err), "error");
+      const message = err instanceof Error ? err.message : String(err);
+      const invalidName = message.includes("输入无效") || message.includes("文件名输入无效");
+      if (inlineEdit.mode === "rename") {
+        setInlineEdit(null);
+      } else if (invalidName) {
+        const existing = new Set(items.map((item) => item.name));
+        const fallback = inlineEdit.mode === "create-folder" ? uniqueName("新建文件夹", existing) : uniqueName(`new.${inlineEdit.templateType ?? "txt"}`, existing);
+        try {
+          if (inlineEdit.mode === "create-folder") await client.mkdir(joinPath(path, fallback));
+          else await client.createTemplate(joinPath(path, fallback), inlineEdit.templateType ?? "txt");
+        } catch {
+          // Keep the original error visible; a fallback failure usually means storage is not writable.
+        }
+        setInlineEdit(null);
+        await load();
+      } else {
+        setInlineEdit(null);
+      }
+      showToast(invalidName ? "文件名输入无效" : message.includes("目标已存在") ? "名称已存在，已自动避让或请重试" : message, "error");
     }
   };
 
   const runAction = async (action: ContextAction, item = context?.item ?? selectedItem) => {
-    if (!item) return;
     try {
+      if (action === "refresh") {
+        await load();
+        setContext(null);
+        return;
+      }
+      if (action === "newFolder") {
+        setInlineEdit({ mode: "create-folder", value: "新建文件夹" });
+        setContext(null);
+        return;
+      }
+      if (action === "newFile") {
+        setInlineEdit({ mode: "create-template", templateType: "txt", value: "new.txt" });
+        setContext(null);
+        return;
+      }
+      if (!item) return;
       if (action === "open") openItem(item);
       if (action === "download") downloadPath(item.path);
       if (action === "rename") setInlineEdit({ mode: "rename", path: item.path, value: item.name });
@@ -377,12 +459,24 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   const openContext = (event: MouseEvent, item: FileItem) => {
     event.preventDefault();
+    event.stopPropagation();
     selectItem(item, false, false);
     setContext({
       x: event.clientX,
       y: event.clientY,
       item,
       actions: path === "/工具/回收站" ? ["restore", "deleteForever", "properties"] : ["open", "download", "rename", "copy", "move", "recycle", "archive", "favorite", "properties"]
+    });
+  };
+
+  const openBlankContext = (event: MouseEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    setContext({
+      x: event.clientX,
+      y: event.clientY,
+      item: { name: basename(path), path, kind: "directory", size: 0, modifiedAt: new Date().toISOString(), extension: "" },
+      actions: path === "/位置/收藏夹" ? ["refresh", "favorite", "properties"] : ["refresh", "newFolder", "newFile", "properties"]
     });
   };
 
@@ -442,8 +536,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <button type="button" aria-label="后退" onClick={goBack} disabled={!history.length}><ArrowLeft size={16} /></button>
-          <button type="button" aria-label="前进" onClick={goForward} disabled={!future.length}><ArrowRight size={16} /></button>
+          <button type="button" aria-label="后退" onClick={() => void goBack()} disabled={!history.length}><ArrowLeft size={16} /></button>
+          <button type="button" aria-label="前进" onClick={() => void goForward()} disabled={!future.length}><ArrowRight size={16} /></button>
           <div className="breadcrumb">
             {pathEditing ? (
               <input aria-label="路径输入" value={pathDraft} onChange={(event) => setPathDraft(event.currentTarget.value)} onKeyDown={(event) => event.key === "Enter" && commitPath()} onBlur={() => setPathEditing(false)} autoFocus />
@@ -522,10 +616,16 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
           </div>
         )}
         <div className={inspectorOpen ? "content" : "content inspector-closed"}>
-          <main
+          {path === "/工具/备忘录" ? (
+            <MemoWorkspace defaultPath="/位置/个人空间" />
+          ) : <main
             className="file-surface"
+            onContextMenu={openBlankContext}
             onPointerDown={(event) => {
-              if (event.target === event.currentTarget) clearSelection();
+              if (event.target === event.currentTarget) {
+                clearSelection();
+                if (inlineEdit) setInlineEdit(null);
+              }
             }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => { event.preventDefault(); void uploadFiles(event.dataTransfer.files); }}
@@ -535,6 +635,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
               selected={selected}
               viewMode={viewMode}
               iconSize={iconSize}
+              sort={sort}
               inlineEdit={inlineEdit}
               onOpen={openItem}
               onSelect={selectItem}
@@ -554,8 +655,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
               </div>
             )}
             {operationProgress && <div className="operation-progress">{operationProgress}</div>}
-          </main>
-          {inspectorOpen && <InspectorPanel path={selectedPath} selectedItems={selectedItems} />}
+          </main>}
+          {inspectorOpen && path !== "/工具/备忘录" && <InspectorPanel path={selectedPath} selectedItems={selectedItems} />}
         </div>
       </section>
       {context && <ContextMenu x={context.x} y={context.y} actions={context.actions} onAction={(action) => void runAction(action)} />}
@@ -569,7 +670,12 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
           onConfirm={(target) => void confirmPathDialog(target)}
         />
       )}
-      {safeDialogOpen && safeStatus && <SafeBoxDialog status={safeStatus} onClose={() => setSafeDialogOpen(false)} onUnlock={(status) => setSafeStatus(status)} />}
+      {safeDialogOpen && safeStatus && <SafeBoxDialog status={safeStatus} onClose={() => setSafeDialogOpen(false)} onUnlock={(status) => {
+        setSafeStatus(status);
+        setSafeDialogOpen(false);
+        void navigate(pendingSafePath ?? "/工具/私密保险箱");
+        setPendingSafePath(null);
+      }} />}
       {adminTab && (
         <div className="modal-backdrop">
           <AdminPanel initialTab={adminTab} plugins={bootstrap.plugins} onClose={() => setAdminTab(null)} />

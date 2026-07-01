@@ -6,6 +6,8 @@ import type {
   FileDetails,
   FileItem,
   MemoEntry,
+  MemoDraft,
+  MemoUpload,
   NotificationItem,
   PathMetadata,
   PluginManifest,
@@ -74,8 +76,17 @@ export const client = {
   saveProperties: (value: PathMetadata) => api<PathMetadata>("/api/metadata/properties", { method: "POST", body: JSON.stringify(value) }),
   memos: (path: string) => api<MemoEntry[]>(`/api/metadata/memos?path=${encodeURIComponent(path)}`),
   addMemo: (path: string, content: string) => api<MemoEntry>("/api/metadata/memos", { method: "POST", body: JSON.stringify({ path, content }) }),
-  updateMemo: (id: string, content: string) => api<MemoEntry>(`/api/metadata/memos/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ content }) }),
+  allMemos: () => api<MemoEntry[]>("/api/metadata/memos?all=1"),
+  updateMemo: (id: string, content: string, path?: string) => api<MemoEntry>(`/api/metadata/memos/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ content, path }) }),
   deleteMemo: (id: string) => api<{ id: string }>(`/api/metadata/memos/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  memoDraft: (id: string) => api<MemoDraft | null>(`/api/metadata/memos/${encodeURIComponent(id)}/draft`),
+  saveMemoDraft: (id: string, path: string, content: string) => api<MemoDraft>(`/api/metadata/memos/${encodeURIComponent(id)}/draft`, { method: "PUT", body: JSON.stringify({ path, content }) }),
+  deleteMemoDraft: (id: string) => api<{ id: string }>(`/api/metadata/memos/${encodeURIComponent(id)}/draft`, { method: "DELETE" }),
+  uploadMemoAttachment: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return api<MemoUpload>("/api/metadata/attachments", { method: "POST", body });
+  },
   storage: () => api<AdminStorageConfig>("/api/admin/storage"),
   saveStorage: (config: Partial<AdminStorageConfig>) => api<AdminStorageConfig>("/api/admin/storage", { method: "POST", body: JSON.stringify(config) })
 };

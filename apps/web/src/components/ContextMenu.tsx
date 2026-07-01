@@ -1,7 +1,7 @@
-import { Copy, Download, Edit3, FileArchive, FolderInput, Info, RotateCcw, Star, Trash2 } from "lucide-react";
+import { Copy, Download, Edit3, FileArchive, FilePlus, FolderInput, FolderPlus, Info, RefreshCw, RotateCcw, Star, Trash2 } from "lucide-react";
 import { text } from "../i18n";
 
-export type ContextAction = "open" | "download" | "rename" | "copy" | "move" | "recycle" | "restore" | "deleteForever" | "archive" | "favorite" | "properties";
+export type ContextAction = "open" | "download" | "rename" | "copy" | "move" | "recycle" | "restore" | "deleteForever" | "archive" | "favorite" | "properties" | "refresh" | "newFolder" | "newFile";
 
 const iconMap = {
   open: Edit3,
@@ -14,7 +14,10 @@ const iconMap = {
   deleteForever: Trash2,
   archive: FileArchive,
   favorite: Star,
-  properties: Info
+  properties: Info,
+  refresh: RefreshCw,
+  newFolder: FolderPlus,
+  newFile: FilePlus
 };
 
 const labelMap: Record<ContextAction, string> = {
@@ -28,7 +31,10 @@ const labelMap: Record<ContextAction, string> = {
   deleteForever: text.contextMenu.actions.deleteForever,
   archive: text.contextMenu.actions.archive,
   favorite: text.contextMenu.actions.favorite,
-  properties: text.contextMenu.actions.properties
+  properties: text.contextMenu.actions.properties,
+  refresh: text.fileManager.refresh,
+  newFolder: text.fileManager.newFolder,
+  newFile: text.fileManager.newFile
 };
 
 interface ContextMenuProps {

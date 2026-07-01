@@ -8,6 +8,7 @@ export type ApiErrorCode =
   | "ARCHIVE_FAILED"
   | "TARGET_NOT_EMPTY"
   | "SAFE_BOX_LOCKED"
+  | "AUTH_COOLDOWN"
   | "AUTH_FAILED"
   | "FILESYSTEM_DENIED";
 

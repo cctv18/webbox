@@ -42,6 +42,7 @@ export class PathResolver {
     if (parts[0] === "工具") {
       if (parts.length === 1) return { kind: "virtual", displayPath: "/工具", virtualId: "tools" };
       if (parts[1] === "最近文档") return { kind: "virtual", displayPath: "/工具/最近文档", virtualId: "recent" };
+      if (parts[1] === "备忘录") return { kind: "virtual", displayPath: "/工具/备忘录", virtualId: "memos" };
       if (parts[1] === "私密保险箱") {
         const rest = parts.slice(2).join("/");
         return { kind: "space", displayPath: `/${parts.join("/")}`, space: "safe", filePath: rest ? `/${rest}` : "/" };

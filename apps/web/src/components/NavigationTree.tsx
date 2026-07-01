@@ -1,4 +1,4 @@
-import { Archive, ChevronRight, Clock, Folder, HardDrive, Heart, Image, Lock, Music, Recycle, Video } from "lucide-react";
+import { Archive, ChevronRight, Clock, Folder, HardDrive, Heart, Image, Lock, Music, NotebookText, Recycle, Video } from "lucide-react";
 import type { TreeNode } from "@webbox/shared";
 
 const iconMap = {
@@ -11,7 +11,8 @@ const iconMap = {
   image: Image,
   music: Music,
   video: Video,
-  setting: Archive
+  setting: Archive,
+  memo: NotebookText
 };
 
 interface NavigationTreeProps {
@@ -36,13 +37,14 @@ export function NavigationTree({ tree, activeId, expandedIds, onSelect, onExpand
     const Icon = iconMap[node.icon as keyof typeof iconMap] ?? Folder;
     const hasChildren = Boolean(node.children?.length);
     const isCollapsed = hasChildren && !expanded.has(node.id);
+    const active = activeId === node.id || activeId === node.path;
     return (
       <div key={node.id} role="none">
         <div
           role="treeitem"
           aria-expanded={hasChildren ? !isCollapsed : undefined}
-          aria-selected={activeId === node.id}
-          className={`tree-item ${activeId === node.id ? "active" : ""}`}
+          aria-selected={active}
+          className={`tree-item ${active ? "active" : ""}`}
           style={{ paddingLeft: `${8 + depth * 16}px` }}
         >
           <button

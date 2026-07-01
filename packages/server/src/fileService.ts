@@ -58,17 +58,19 @@ export class FileService {
     await fsp.rename(source, path.join(path.dirname(source), safeName));
   }
 
-  async copy(sourcePath: string, targetPath: string): Promise<void> {
+  async copy(sourcePath: string, targetPath: string): Promise<{ path: string }> {
     const source = resolveInsideRoot(this.root, sourcePath);
-    const target = resolveInsideRoot(this.root, targetPath);
+    const target = await this.availableAbsolutePath(resolveInsideRoot(this.root, targetPath));
     await fsp.mkdir(path.dirname(target), { recursive: true });
     await fsp.cp(source, target, { recursive: true, errorOnExist: true, force: false });
+    return { path: toVirtualPath(this.root, target) };
   }
 
-  async move(sourcePath: string, targetPath: string): Promise<void> {
-    const target = resolveInsideRoot(this.root, targetPath);
+  async move(sourcePath: string, targetPath: string): Promise<{ path: string }> {
+    const target = await this.availableAbsolutePath(resolveInsideRoot(this.root, targetPath));
     await fsp.mkdir(path.dirname(target), { recursive: true });
     await fsp.rename(resolveInsideRoot(this.root, sourcePath), target);
+    return { path: toVirtualPath(this.root, target) };
   }
 
   async remove(virtualPath: string): Promise<void> {
@@ -117,12 +119,12 @@ export class FileService {
     const index = await this.readRecycleIndex();
     const record = index[recycleId];
     if (!record) throw new Error("PATH_NOT_FOUND");
-    const target = resolveInsideRoot(this.root, record.originalPath);
+    const target = await this.availableAbsolutePath(resolveInsideRoot(this.root, record.originalPath));
     await fsp.mkdir(path.dirname(target), { recursive: true });
     await fsp.rename(record.recycledPath, target);
     delete index[recycleId];
     await this.writeRecycleIndex(index);
-    return { path: record.originalPath };
+    return { path: toVirtualPath(this.root, target) };
   }
 
   async removeRecycle(recycleId: string): Promise<void> {
@@ -168,7 +170,7 @@ export class FileService {
 
   async zip(paths: string[], targetPath: string): Promise<{ path: string }> {
     await this.ensureRoot();
-    const target = resolveInsideRoot(this.root, targetPath);
+    const target = await this.availableAbsolutePath(resolveInsideRoot(this.root, targetPath));
     await fsp.mkdir(path.dirname(target), { recursive: true });
     await new Promise<void>((resolve, reject) => {
       const output = fs.createWriteStream(target);
@@ -191,11 +193,11 @@ export class FileService {
   async unzip(zipPath: string, targetDir: string): Promise<{ path: string }> {
     await this.ensureRoot();
     const source = resolveInsideRoot(this.root, zipPath);
-    const target = resolveInsideRoot(this.root, targetDir);
+    const target = await this.availableAbsolutePath(resolveInsideRoot(this.root, targetDir));
     await fsp.mkdir(target, { recursive: true });
     const directory = await unzipper.Open.file(source);
     await Promise.all(directory.files.map(async (file) => {
-      const destination = resolveInsideRoot(target, `/${file.path}`);
+      const destination = await this.availableAbsolutePath(resolveInsideRoot(target, `/${file.path}`));
       if (file.type === "Directory") {
         await fsp.mkdir(destination, { recursive: true });
       } else {
@@ -229,6 +231,30 @@ export class FileService {
       if (!isDirectory) total += (await fsp.stat(entry)).size;
     });
     return total;
+  }
+
+  private async availableAbsolutePath(target: string): Promise<string> {
+    let candidate = target;
+    let index = 2;
+    while (await this.pathExists(candidate)) {
+      candidate = this.suffixedPath(target, index);
+      index += 1;
+    }
+    return candidate;
+  }
+
+  private suffixedPath(target: string, index: number): string {
+    const parsed = path.parse(target);
+    return path.join(parsed.dir, `${parsed.name}（${index}）${parsed.ext}`);
+  }
+
+  private async pathExists(target: string): Promise<boolean> {
+    try {
+      await fsp.access(target);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async toFileItem(absolute: string, isDirectoryHint?: boolean): Promise<FileItem> {
