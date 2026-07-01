@@ -1,5 +1,4 @@
 import { Archive, ChevronRight, Clock, Folder, HardDrive, Heart, Image, Lock, Music, Recycle, Video } from "lucide-react";
-import { useState } from "react";
 import type { TreeNode } from "@webbox/shared";
 
 const iconMap = {
@@ -18,16 +17,25 @@ const iconMap = {
 interface NavigationTreeProps {
   tree: TreeNode[];
   activeId: string;
+  expandedIds: string[];
   onSelect: (node: TreeNode) => void;
+  onExpandedChange: (ids: string[]) => void;
 }
 
-export function NavigationTree({ tree, activeId, onSelect }: NavigationTreeProps) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+export function NavigationTree({ tree, activeId, expandedIds, onSelect, onExpandedChange }: NavigationTreeProps) {
+  const expanded = new Set(expandedIds);
+
+  const toggle = (node: TreeNode) => {
+    const next = new Set(expandedIds);
+    if (next.has(node.id)) next.delete(node.id);
+    else next.add(node.id);
+    onExpandedChange(Array.from(next));
+  };
 
   const renderNode = (node: TreeNode, depth: number) => {
     const Icon = iconMap[node.icon as keyof typeof iconMap] ?? Folder;
     const hasChildren = Boolean(node.children?.length);
-    const isCollapsed = Boolean(collapsed[node.id]);
+    const isCollapsed = hasChildren && !expanded.has(node.id);
     return (
       <div key={node.id} role="none">
         <div
@@ -41,7 +49,7 @@ export function NavigationTree({ tree, activeId, onSelect }: NavigationTreeProps
             type="button"
             className="tree-expander"
             aria-label={isCollapsed ? `展开${node.label}` : `折叠${node.label}`}
-            onClick={() => hasChildren && setCollapsed((current) => ({ ...current, [node.id]: !current[node.id] }))}
+            onClick={() => hasChildren && toggle(node)}
             disabled={!hasChildren}
           >
             {hasChildren && <ChevronRight size={14} className={isCollapsed ? "" : "expanded"} />}

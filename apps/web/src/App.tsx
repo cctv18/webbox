@@ -8,7 +8,7 @@ import "./styles.css";
 
 export function AppShell({ bootstrap }: { bootstrap: BootstrapData }) {
   return (
-    <main className="app-shell">
+    <main className="app-shell" onContextMenu={(event) => event.preventDefault()}>
       <FileManager bootstrap={bootstrap} />
     </main>
   );

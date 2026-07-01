@@ -164,4 +164,50 @@ describe("Webbox UI", () => {
     expect(screen.queryByText("创建快捷方式")).not.toBeInTheDocument();
     expect(screen.queryByText("发送到桌面快捷方式")).not.toBeInTheDocument();
   });
+
+  it("prevents the native page context menu and uses webbox context actions", async () => {
+    const { container } = render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    container.querySelector(".app-shell")!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("shows inspector success toast after saving properties", async () => {
+    render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("标签"), { target: { value: "work" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    expect(await screen.findByText("保存成功")).toBeInTheDocument();
+  });
+
+  it("opens the inspector when the context menu properties action is selected", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/files?")) {
+        return { json: async () => ({ ok: true, data: [
+          { name: "readme.md", path: "/位置/个人空间/readme.md", kind: "file", size: 4, modifiedAt: "2026-01-01T00:00:00.000Z", extension: "md" }
+        ] }) };
+      }
+      return { json: async () => ({ ok: true, data: [] }) };
+    }));
+    render(<AppShell bootstrap={bootstrap} />);
+    const row = await screen.findByRole("row", { name: /readme\.md/ });
+    fireEvent.click(screen.getByRole("button", { name: /隐藏属性/ }));
+    expect(screen.queryByText(text.inspector.title)).not.toBeInTheDocument();
+    fireEvent.contextMenu(row);
+    fireEvent.click(screen.getByRole("button", { name: text.contextMenu.actions.properties }));
+    expect(screen.getByText(text.inspector.title)).toBeInTheDocument();
+  });
+
+  it("renders memo tools as icon buttons with markdown preview support", async () => {
+    render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: text.inspector.memos }));
+    expect(screen.getByRole("button", { name: "插入表情" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "插入图片" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "插入附件" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Markdown 预览" }));
+    expect(screen.getByLabelText("Markdown 预览区")).toBeInTheDocument();
+  });
 });

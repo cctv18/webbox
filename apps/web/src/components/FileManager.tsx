@@ -1,4 +1,4 @@
-import { ArrowDownUp, ArrowLeft, ArrowRight, ChevronDown, Download, Eye, EyeOff, FilePlus, FolderPlus, Grid2X2, List, RefreshCw, Search, SlidersHorizontal, Star, Upload } from "lucide-react";
+import { ArrowDownUp, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus, FolderPlus, Grid2X2, List, RefreshCw, Search, SlidersHorizontal, Star, Upload, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { BootstrapData, FavoriteEntry, FileItem, NotificationItem, SafeBoxStatus, SortKey, SortState, TemplateFileType, TreeNode, ViewMode, WebboxSettings } from "@webbox/shared";
 import { client } from "../api/client";
@@ -8,6 +8,7 @@ import { ContextMenu, type ContextAction } from "./ContextMenu";
 import { FileGrid, type InlineEditState } from "./FileGrid";
 import { InspectorPanel } from "./InspectorPanel";
 import { NavigationTree } from "./NavigationTree";
+import { PathActionDialog } from "./PathActionDialog";
 import { SafeBoxDialog } from "./SafeBoxDialog";
 import { uiAssets } from "../assets";
 import { text } from "../i18n";
@@ -20,6 +21,14 @@ interface ContextState {
 }
 
 type ToolbarMenu = "upload" | "new-file" | "sort" | "icon-size" | null;
+type ToastState = { id: number; type: "success" | "error"; message: string } | null;
+type PathDialogState = {
+  action: "copy" | "move" | "zip" | "unzip";
+  title: string;
+  label: string;
+  initialPath: string;
+  item: FileItem;
+} | null;
 
 function joinPath(base: string, name: string): string {
   return `${base.replace(/\/$/, "")}/${name}`.replace(/\/+/g, "/");
@@ -89,10 +98,11 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const [items, setItems] = useState<FileItem[]>([]);
   const [tree, setTree] = useState<TreeNode[]>(bootstrap.tree?.length ? [...bootstrap.tree] : defaultTree());
   const [path, setPath] = useState("/位置/个人空间");
+  const [expandedTreeIds, setExpandedTreeIds] = useState<string[]>(["locations", "personal", "tools", "mounts"]);
   const [history, setHistory] = useState<string[]>([]);
   const [future, setFuture] = useState<string[]>([]);
   const [activeNode, setActiveNode] = useState("personal");
-  const [error, setError] = useState("");
+  const [toast, setToast] = useState<ToastState>(null);
   const [adminTab, setAdminTab] = useState<"overview" | "plugins" | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
@@ -110,6 +120,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null);
   const [toolbarMenu, setToolbarMenu] = useState<ToolbarMenu>(null);
+  const [pathDialog, setPathDialog] = useState<PathDialogState>(null);
   const [operationProgress, setOperationProgress] = useState("");
   const [explorerSettings, setExplorerSettings] = useState<WebboxSettings["explorer"] | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -121,8 +132,11 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const selectedItems = useMemo(() => items.filter((item) => selected.includes(item.path)), [items, selected]);
   const favorite = favorites.find((entry) => entry.path === path);
 
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ id: Date.now(), type, message });
+  };
+
   const load = async (nextPath = path) => {
-    setError("");
     try {
       if (nextPath === "/工具/回收站") {
         const recycleItems = await client.recycleList();
@@ -133,7 +147,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setSelected([]);
       setContext(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error && err.message === "输入无效" ? "文件名输入无效" : err instanceof Error ? err.message : String(err), "error");
     }
   };
 
@@ -145,6 +159,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setViewMode(settings.explorer.viewMode);
       setIconSize(settings.explorer.iconSize);
       setSort(settings.explorer.sort);
+      setExpandedTreeIds(settings.explorer.expandedTreeIds);
+      if (settings.explorer.currentPath) setPath(settings.explorer.currentPath);
       setExplorerSettings(settings.explorer);
     }).catch(() => undefined);
     void client.favorites().then(setFavorites).catch(() => undefined);
@@ -152,8 +168,14 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   useEffect(() => {
     if (!explorerSettings) return;
-    void client.saveSettings({ explorer: { ...explorerSettings, viewMode, iconSize, sort } }).catch(() => undefined);
-  }, [viewMode, iconSize, sort]);
+    void client.saveSettings({ explorer: { ...explorerSettings, viewMode, iconSize, sort, currentPath: path, expandedTreeIds } }).catch(() => undefined);
+  }, [viewMode, iconSize, sort, path, expandedTreeIds]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast((current) => current?.id === toast.id ? null : current), 5000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (typeof EventSource === "undefined") return;
@@ -258,7 +280,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setInlineEdit(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error && err.message === "输入无效" ? "文件名输入无效" : err instanceof Error ? err.message : String(err), "error");
     }
   };
 
@@ -269,12 +291,12 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       if (action === "download") downloadPath(item.path);
       if (action === "rename") setInlineEdit({ mode: "rename", path: item.path, value: item.name });
       if (action === "copy") {
-        const target = window.prompt("复制到路径", joinPath(path, item.name));
-        if (target) await client.copy(item.path, target);
+        setPathDialog({ action: "copy", title: "复制", label: "复制到路径", initialPath: joinPath(path, item.name), item });
+        return;
       }
       if (action === "move") {
-        const target = window.prompt("移动到路径", joinPath(path, item.name));
-        if (target) await client.move(item.path, target);
+        setPathDialog({ action: "move", title: "移动", label: "移动到路径", initialPath: joinPath(path, item.name), item });
+        return;
       }
       if (action === "recycle") await client.recycle(item.path);
       if (action === "restore") await client.restore(item.path);
@@ -285,31 +307,54 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
         else await client.addFavorite(item.path, item.name);
         setFavorites(await client.favorites());
       }
-      if (action === "archive") await archiveItem(item);
-      if (action === "properties") setSelected([item.path]);
+      if (action === "archive") {
+        openArchiveDialog(item);
+        return;
+      }
+      if (action === "properties") {
+        setSelected([item.path]);
+        setInspectorOpen(true);
+      }
       if (!["open", "download", "rename", "favorite", "properties"].includes(action)) await load();
       await refreshNotifications();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      showToast(err instanceof Error ? err.message : String(err), "error");
     }
   };
 
-  const archiveItem = async (item: FileItem) => {
+  const openArchiveDialog = (item: FileItem) => {
     const activePaths = selected.length ? selected : [item.path];
     if (item.kind === "file" && item.extension === "zip") {
-      const targetDir = window.prompt("解压到路径", joinPath(path, basename(item.path).replace(/\.zip$/i, "")));
-      if (!targetDir) return;
-      setOperationProgress("正在解压...");
-      await client.unzip(item.path, targetDir);
-      setOperationProgress("解压完成");
+      setPathDialog({ action: "unzip", title: "解压", label: "解压到路径", initialPath: joinPath(path, basename(item.path).replace(/\.zip$/i, "")), item });
       return;
     }
     const defaultName = activePaths.length === 1 ? `${basename(activePaths[0]).replace(/\.[^.]+$/, "")}.zip` : "archive.zip";
-    const target = window.prompt("压缩文件保存为", joinPath(path, defaultName));
-    if (!target) return;
-    setOperationProgress("正在压缩...");
-    await client.zip(activePaths, target);
-    setOperationProgress("压缩完成");
+    setPathDialog({ action: "zip", title: "压缩", label: "压缩文件保存为", initialPath: joinPath(path, defaultName), item });
+  };
+
+  const confirmPathDialog = async (targetPath: string) => {
+    if (!pathDialog) return;
+    try {
+      if (pathDialog.action === "copy") await client.copy(pathDialog.item.path, targetPath);
+      if (pathDialog.action === "move") await client.move(pathDialog.item.path, targetPath);
+      if (pathDialog.action === "unzip") {
+        setOperationProgress("正在解压...");
+        await client.unzip(pathDialog.item.path, targetPath);
+        setOperationProgress("解压完成");
+      }
+      if (pathDialog.action === "zip") {
+        const activePaths = selected.length ? selected : [pathDialog.item.path];
+        setOperationProgress("正在压缩...");
+        await client.zip(activePaths, targetPath);
+        setOperationProgress("压缩完成");
+      }
+      setPathDialog(null);
+      await load();
+      await refreshNotifications();
+      showToast("操作完成");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), "error");
+    }
   };
 
   const runSearch = async () => {
@@ -353,7 +398,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   const commitPath = () => {
     if (!pathDraft.startsWith("/") || pathDraft.includes("..") || pathDraft.includes("\\") || /^[a-zA-Z]:/.test(pathDraft)) {
-      setError("路径输入无效");
+      showToast("路径输入无效", "error");
       setPathDraft(path);
       setPathEditing(false);
       return;
@@ -380,7 +425,13 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
     <div className="file-manager" onClick={() => setContext(null)}>
       <aside className="tree">
         <h1>Webbox</h1>
-        <NavigationTree tree={tree} activeId={activeNode} onSelect={(node) => void selectNode(node)} />
+        <NavigationTree
+          tree={tree}
+          activeId={activeNode}
+          expandedIds={expandedTreeIds}
+          onExpandedChange={setExpandedTreeIds}
+          onSelect={(node) => void selectNode(node)}
+        />
         <BottomMenu
           onAdmin={() => setAdminTab("overview")}
           onPlugins={() => setAdminTab("plugins")}
@@ -456,9 +507,20 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
             )}
           </div>
           <button type="button" onClick={() => setInspectorOpen((value) => !value)}>{inspectorOpen ? <EyeOff size={16} /> : <Eye size={16} />}{inspectorOpen ? "隐藏属性" : "显示属性"}</button>
-          {path.includes("私密保险箱") && <button type="button" onClick={() => void client.safeLogout().then(() => setSafeStatus({ state: "locked", message: text.safeBox.locked, path }))}>锁定</button>}
+          {path.includes("私密保险箱") && <button type="button" onClick={() => void client.safeLogout().then(async () => {
+            setSafeStatus({ state: "locked", message: text.safeBox.locked, path });
+            setItems([]);
+            setSelected([]);
+            await navigate("/位置/个人空间", "personal");
+            void client.tree().then((nodes) => nodes.length && setTree(nodes)).catch(() => undefined);
+          })}>锁定</button>}
         </header>
-        {error && <div className="toast">{error}</div>}
+        {toast && (
+          <div className={`app-toast ${toast.type}`} role="status">
+            {toast.type === "success" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
+            <span>{toast.message}</span>
+          </div>
+        )}
         <div className={inspectorOpen ? "content" : "content inspector-closed"}>
           <main
             className="file-surface"
@@ -497,6 +559,16 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
         </div>
       </section>
       {context && <ContextMenu x={context.x} y={context.y} actions={context.actions} onAction={(action) => void runAction(action)} />}
+      {pathDialog && (
+        <PathActionDialog
+          title={pathDialog.title}
+          label={pathDialog.label}
+          initialPath={pathDialog.initialPath}
+          tree={tree}
+          onClose={() => setPathDialog(null)}
+          onConfirm={(target) => void confirmPathDialog(target)}
+        />
+      )}
       {safeDialogOpen && safeStatus && <SafeBoxDialog status={safeStatus} onClose={() => setSafeDialogOpen(false)} onUnlock={(status) => setSafeStatus(status)} />}
       {adminTab && (
         <div className="modal-backdrop">

@@ -143,6 +143,7 @@ export class FileService {
   async details(virtualPath: string): Promise<FileDetails> {
     const absolute = resolveInsideRoot(this.root, virtualPath);
     const item = await this.toFileItem(absolute);
+    if (item.kind === "directory") item.size = await this.directorySize(absolute);
     return {
       ...item,
       tags: [],
@@ -220,6 +221,14 @@ export class FileService {
       if (isDirectory) await this.walk(full, visit);
       if (entry.name === ".webbox-stop") break;
     }
+  }
+
+  private async directorySize(absolute: string): Promise<number> {
+    let total = 0;
+    await this.walk(absolute, async (entry, isDirectory) => {
+      if (!isDirectory) total += (await fsp.stat(entry)).size;
+    });
+    return total;
   }
 
   private async toFileItem(absolute: string, isDirectoryHint?: boolean): Promise<FileItem> {

@@ -728,6 +728,32 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     res.json(ok(memo));
   });
 
+  app.put("/api/metadata/memos/:id", async (req, res) => {
+    const id = req.params.id;
+    const content = String(req.body.content ?? "");
+    try {
+      let updated;
+      await services.metadata?.update((state) => {
+        const memo = state.memos.find((item) => item.id === id);
+        if (!memo) throw new Error("PATH_NOT_FOUND");
+        memo.content = content;
+        memo.updatedAt = new Date().toISOString();
+        updated = memo;
+      });
+      res.json(ok(updated));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.delete("/api/metadata/memos/:id", async (req, res) => {
+    const id = req.params.id;
+    await services.metadata?.update((state) => {
+      state.memos = state.memos.filter((memo) => memo.id !== id);
+    });
+    res.json(ok({ id }));
+  });
+
   app.get("/api/admin/storage", async (_req, res) => {
     res.json(ok(services.library?.getConfig()));
   });

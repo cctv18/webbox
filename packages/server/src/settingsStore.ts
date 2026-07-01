@@ -9,7 +9,9 @@ export const defaultSettings: WebboxSettings = {
     viewMode: "list",
     iconSize: 72,
     sort: { key: "name", direction: "asc" },
-    searchHistoryLimit: 10
+    searchHistoryLimit: 10,
+    currentPath: "/位置/个人空间",
+    expandedTreeIds: ["locations", "personal", "tools", "mounts"]
   },
   upload: {
     chunkSizeMb: 8,

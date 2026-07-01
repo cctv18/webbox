@@ -19,6 +19,8 @@ export interface ExplorerPreferences {
   iconSize: number;
   sort: SortState;
   searchHistoryLimit: number;
+  currentPath: string;
+  expandedTreeIds: string[];
 }
 
 export interface WebboxSettings {

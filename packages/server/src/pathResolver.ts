@@ -21,7 +21,15 @@ export class PathResolver {
       if (parts[1] !== "个人空间") throw new Error("INVALID_PATH");
       if (parts.length === 2) return { kind: "space", displayPath: "/位置/个人空间", space: "personal", filePath: "/" };
       const space = SPACE_BY_LABEL[parts[2]];
-      if (!space) throw new Error("INVALID_PATH");
+      if (!space) {
+        const personalRest = parts.slice(2).join("/");
+        return {
+          kind: "space",
+          displayPath: `/${parts.join("/")}`,
+          space: "personal",
+          filePath: personalRest ? `/${personalRest}` : "/"
+        };
+      }
       const rest = parts.slice(3).join("/");
       return {
         kind: "space",

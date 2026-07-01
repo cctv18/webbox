@@ -149,6 +149,40 @@ describe("server routes", () => {
     expect(afterRecycle.body.data).toEqual([]);
   });
 
+  it("keeps ordinary personal-space folders inside the personal files root", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/folder").send({ path: "/位置/个人空间/普通目录" }).expect(200);
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/普通目录/a.txt", content: "alpha" }).expect(200);
+
+    const personal = await request(app).get("/api/files").query({ path: "/位置/个人空间" }).expect(200);
+    expect(personal.body.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "普通目录", path: "/位置/个人空间/普通目录", kind: "directory" })
+    ]));
+
+    const nested = await request(app).get("/api/files").query({ path: "/位置/个人空间/普通目录" }).expect(200);
+    expect(nested.body.data[0]).toMatchObject({
+      name: "a.txt",
+      path: "/位置/个人空间/普通目录/a.txt",
+      kind: "file"
+    });
+  });
+
+  it("returns recursive size for directory details", async () => {
+    const app = await createApp({ storageRoot, dataRoot, pluginRoot });
+
+    await request(app).post("/api/files/folder").send({ path: "/位置/个人空间/普通目录" }).expect(200);
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/普通目录/a.txt", content: "12345" }).expect(200);
+    await request(app).post("/api/files/text").send({ path: "/位置/个人空间/普通目录/sub/b.txt", content: "1234567" }).expect(200);
+
+    const details = await request(app).get("/api/files/details").query({ path: "/位置/个人空间/普通目录" }).expect(200);
+    expect(details.body.data).toMatchObject({
+      path: "/位置/个人空间/普通目录",
+      kind: "directory",
+      size: 12
+    });
+  });
+
   it("shows personal-space shortcut folders and serves virtual favorites and recent documents", async () => {
     const app = await createApp({ storageRoot, dataRoot, pluginRoot });
 

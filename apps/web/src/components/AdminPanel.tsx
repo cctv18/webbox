@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import type { AdminStorageConfig, PluginManifest } from "@webbox/shared";
 import { client } from "../api/client";
 import { text } from "../i18n";
@@ -31,17 +32,20 @@ export function AdminPanel({ initialTab = "overview", plugins, onClose }: AdminP
   const [tab, setTab] = useState(initialTab);
   const [storage, setStorage] = useState<AdminStorageConfig | null>(null);
   const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error">("success");
 
   useEffect(() => {
-    client.storage().then(setStorage).catch((err: Error) => setMessage(err.message));
+    client.storage().then(setStorage).catch((err: Error) => { setMessageType("error"); setMessage(err.message); });
   }, []);
 
   const saveStorage = async () => {
     if (!storage) return;
     try {
       setStorage(await client.saveStorage(storage));
+      setMessageType("success");
       setMessage(text.fileManager.operationDone);
     } catch (err) {
+      setMessageType("error");
       setMessage(err instanceof Error ? err.message : text.admin.storage.targetNotEmpty);
     }
   };
@@ -57,7 +61,7 @@ export function AdminPanel({ initialTab = "overview", plugins, onClose }: AdminP
           <button className={id === tab ? "active" : ""} type="button" key={id} onClick={() => setTab(id)}>{label}</button>
         ))}
       </nav>
-      {message && <div className="toast">{message}</div>}
+      {message && <div className={`panel-toast ${messageType}`} role="status">{messageType === "success" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}{message}</div>}
       <div className="admin-grid">
         {tab === "overview" && <section>
           <h3>{text.admin.tabs.overview}</h3>

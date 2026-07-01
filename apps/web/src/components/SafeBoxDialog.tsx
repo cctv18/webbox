@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { XCircle } from "lucide-react";
 import type { SafeBoxStatus } from "@webbox/shared";
 import { client } from "../api/client";
 import { text } from "../i18n";
@@ -28,8 +29,8 @@ export function SafeBoxDialog({ status, onClose, onUnlock }: SafeBoxDialogProps)
     <div className="modal-backdrop">
       <section className="safe-dialog">
         <header><h2>{isSetup ? text.safeBox.setupTitle : text.safeBox.loginTitle}</h2></header>
-        <label>{text.safeBox.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        {error && <div className="toast">{error}</div>}
+        <label>{text.safeBox.password}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void submit()} /></label>
+        {error && <div className="panel-toast error" role="status"><XCircle size={16} />{error}</div>}
         <footer>
           <button type="button" onClick={onClose}>{text.admin.close}</button>
           <button type="button" onClick={submit}>{isSetup ? text.safeBox.open : text.safeBox.unlock}</button>
