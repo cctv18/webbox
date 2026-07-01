@@ -9,10 +9,11 @@ import { FileGrid, type InlineEditState } from "./FileGrid";
 import { InspectorPanel } from "./InspectorPanel";
 import { MemoWorkspace } from "./MemoWorkspace";
 import { NavigationTree } from "./NavigationTree";
+import { NetworkMountPanel } from "./NetworkMountPanel";
 import { PathActionDialog } from "./PathActionDialog";
 import { SafeBoxDialog } from "./SafeBoxDialog";
 import { uiAssets } from "../assets";
-import { text } from "../i18n";
+import { applyTheme, setLanguage, text } from "../i18n";
 
 interface ContextState {
   x: number;
@@ -119,7 +120,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const [future, setFuture] = useState<string[]>([]);
   const [activeNode, setActiveNode] = useState("personal");
   const [toast, setToast] = useState<ToastState>(null);
-  const [adminTab, setAdminTab] = useState<"overview" | "plugins" | null>(null);
+  const [adminTab, setAdminTab] = useState<"overview" | "settings" | "storage" | "plugins" | "notice" | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -140,6 +141,8 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
   const [pathDialog, setPathDialog] = useState<PathDialogState>(null);
   const [operationProgress, setOperationProgress] = useState("");
   const [explorerSettings, setExplorerSettings] = useState<WebboxSettings["explorer"] | null>(null);
+  const [language, setLanguageState] = useState<"zh-CN" | "en-US">(bootstrap.language === "en-US" ? "en-US" : "zh-CN");
+  const [theme, setThemeState] = useState<"light" | "dark" | "system">(bootstrap.theme === "dark" || bootstrap.theme === "light" ? bootstrap.theme : "system");
   const uploadRef = useRef<HTMLInputElement>(null);
   const folderUploadRef = useRef<HTMLInputElement>(null);
 
@@ -151,6 +154,11 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ id: Date.now(), type, message });
+  };
+
+  const refreshTree = async () => {
+    const nodes = await client.tree();
+    if (nodes.length) setTree(nodes);
   };
 
   const load = async (nextPath = path) => {
@@ -181,9 +189,21 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       setFuture(settings.explorer.historyForward ?? []);
       if (settings.explorer.currentPath) setPath(settings.explorer.currentPath);
       setExplorerSettings(settings.explorer);
+      setLanguageState(settings.explorer.language);
+      setLanguage(settings.explorer.language);
+      setThemeState(settings.explorer.theme);
+      applyTheme(settings.explorer.theme);
     }).catch(() => undefined);
     void client.favorites().then(setFavorites).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    setLanguage(language);
+  }, [language]);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     if (!explorerSettings) return;
@@ -215,6 +235,10 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
 
   const navigate = async (nextPath: string, nodeId?: string) => {
     if (nextPath === path) return;
+    if (nextPath === "/网络挂载/新增网络挂载") {
+      setPath("/网络挂载");
+      return;
+    }
     if (isSafeBoxPath(nextPath)) {
       const status = await client.safeStatus();
       setSafeStatus(status);
@@ -359,11 +383,13 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
         return;
       }
       if (action === "newFolder") {
+        if (path === "/位置/收藏夹" || path.startsWith("/网络挂载")) return;
         setInlineEdit({ mode: "create-folder", value: "新建文件夹" });
         setContext(null);
         return;
       }
       if (action === "newFile") {
+        if (path === "/位置/收藏夹" || path.startsWith("/网络挂载")) return;
         setInlineEdit({ mode: "create-template", templateType: "txt", value: "new.txt" });
         setContext(null);
         return;
@@ -476,8 +502,24 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
       x: event.clientX,
       y: event.clientY,
       item: { name: basename(path), path, kind: "directory", size: 0, modifiedAt: new Date().toISOString(), extension: "" },
-      actions: path === "/位置/收藏夹" ? ["refresh", "favorite", "properties"] : ["refresh", "newFolder", "newFile", "properties"]
+      actions: path === "/位置/收藏夹" ? ["refresh", "favorite", "properties"] : path.startsWith("/网络挂载") ? ["refresh", "properties"] : ["refresh", "newFolder", "newFile", "properties"]
     });
+  };
+
+  const saveLanguage = async (next: "zh-CN" | "en-US") => {
+    setLanguageState(next);
+    setLanguage(next);
+    const base = explorerSettings ?? { theme, language: next, viewMode, iconSize, sort, searchHistoryLimit: 10, currentPath: path, expandedTreeIds, historyBack: history, historyForward: future };
+    const saved = await client.saveSettings({ explorer: { ...base, language: next } });
+    setExplorerSettings(saved.explorer);
+  };
+
+  const saveTheme = async (next: "light" | "dark" | "system") => {
+    setThemeState(next);
+    applyTheme(next);
+    const base = explorerSettings ?? { theme: next, language, viewMode, iconSize, sort, searchHistoryLimit: 10, currentPath: path, expandedTreeIds, historyBack: history, historyForward: future };
+    const saved = await client.saveSettings({ explorer: { ...base, theme: next } });
+    setExplorerSettings(saved.explorer);
   };
 
   const toggleSort = (key: SortKey) => {
@@ -526,13 +568,15 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
           onExpandedChange={setExpandedTreeIds}
           onSelect={(node) => void selectNode(node)}
         />
-        <BottomMenu
-          onAdmin={() => setAdminTab("overview")}
-          onPlugins={() => setAdminTab("plugins")}
-          notifications={notifications}
-          onNotificationRead={(id) => void markNotification(id)}
-          onNotificationClear={() => void clearNotifications()}
-        />
+          <BottomMenu
+            onAdmin={() => setAdminTab("overview")}
+            onPlugins={() => setAdminTab("plugins")}
+            notifications={notifications}
+            onNotificationRead={(id) => void markNotification(id)}
+            onNotificationClear={() => void clearNotifications()}
+            onLanguage={(next) => void saveLanguage(next)}
+            onTheme={(next) => void saveTheme(next)}
+          />
       </aside>
       <section className="workspace">
         <header className="topbar">
@@ -556,7 +600,19 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
             <input placeholder={text.fileManager.search} value={searchText} onChange={(event) => setSearchText(event.currentTarget.value)} onKeyDown={onSearchKey} />
           </label>
         </header>
-        <header className="toolbar">
+        {path === "/位置/收藏夹" ? (
+          <header className="toolbar">
+            <button type="button" onClick={() => void load()}><RefreshCw size={16} />{text.fileManager.refresh}</button>
+            <button type="button" onClick={() => {
+              const favoriteItem = favorites.find((entry) => selected.includes(entry.path));
+              if (favoriteItem) void client.removeFavorite(favoriteItem.id).then(async () => { setFavorites(await client.favorites()); await load(); });
+            }}>删除收藏</button>
+            <button type="button" aria-label={viewMode === "grid" ? text.fileManager.listView : text.fileManager.gridView} onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}>{viewMode === "grid" ? <List size={16} /> : <Grid2X2 size={16} />}</button>
+            <button type="button" aria-label="调整图标大小" onClick={() => setToolbarMenu(toolbarMenu === "icon-size" ? null : "icon-size")}><SlidersHorizontal size={16} /></button>
+            <button type="button" aria-label="排序" onClick={() => setToolbarMenu(toolbarMenu === "sort" ? null : "sort")}><ArrowDownUp size={16} /></button>
+            <button type="button" onClick={() => setInspectorOpen((value) => !value)}>{inspectorOpen ? <EyeOff size={16} /> : <Eye size={16} />}{inspectorOpen ? "隐藏属性" : "显示属性"}</button>
+          </header>
+        ) : path === "/网络挂载" ? null : <header className="toolbar">
           <button type="button" onClick={() => void load()}><RefreshCw size={16} />{text.fileManager.refresh}</button>
           <div className="toolbar-group">
             <button type="button" onClick={() => uploadRef.current?.click()}><Upload size={16} />{text.fileManager.upload}</button>
@@ -608,16 +664,18 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
             await navigate("/位置/个人空间", "personal");
             void client.tree().then((nodes) => nodes.length && setTree(nodes)).catch(() => undefined);
           })}>锁定</button>}
-        </header>
+        </header>}
         {toast && (
           <div className={`app-toast ${toast.type}`} role="status">
             {toast.type === "success" ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
             <span>{toast.message}</span>
           </div>
         )}
-        <div className={inspectorOpen ? "content" : "content inspector-closed"}>
+        <div className={inspectorOpen && path !== "/工具/备忘录" && path !== "/网络挂载" ? "content" : "content inspector-closed"}>
           {path === "/工具/备忘录" ? (
             <MemoWorkspace defaultPath="/位置/个人空间" />
+          ) : path === "/网络挂载" ? (
+            <NetworkMountPanel onToast={showToast} onRefreshTree={() => void refreshTree()} />
           ) : <main
             className="file-surface"
             onContextMenu={openBlankContext}
@@ -656,7 +714,7 @@ export function FileManager({ bootstrap }: { bootstrap: BootstrapData }) {
             )}
             {operationProgress && <div className="operation-progress">{operationProgress}</div>}
           </main>}
-          {inspectorOpen && path !== "/工具/备忘录" && <InspectorPanel path={selectedPath} selectedItems={selectedItems} />}
+          {inspectorOpen && path !== "/工具/备忘录" && path !== "/网络挂载" && <InspectorPanel path={selectedPath} selectedItems={selectedItems} />}
         </div>
       </section>
       {context && <ContextMenu x={context.x} y={context.y} actions={context.actions} onAction={(action) => void runAction(action)} />}

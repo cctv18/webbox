@@ -45,8 +45,12 @@ interface ContextMenuProps {
 }
 
 export function ContextMenu({ x = 0, y = 0, actions = ["open", "download", "rename", "copy", "move", "recycle", "archive", "favorite", "properties"], onAction }: ContextMenuProps) {
+  const width = 190;
+  const estimatedHeight = actions.length * 32 + 10;
+  const left = Math.max(4, Math.min(x, globalThis.innerWidth ? globalThis.innerWidth - width - 4 : x));
+  const top = Math.max(4, Math.min(y, globalThis.innerHeight ? globalThis.innerHeight - estimatedHeight - 4 : y));
   return (
-    <div className="context-menu" aria-label={text.contextMenu.label} style={{ left: x, top: y }}>
+    <div className="context-menu" aria-label={text.contextMenu.label} style={{ left, top }}>
       {actions.map((action) => {
         const Icon = iconMap[action];
         return (

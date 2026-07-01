@@ -20,6 +20,7 @@ import { WorkspaceService } from "./workspaceService.js";
 import { PathResolver } from "./pathResolver.js";
 import { SettingsStore } from "./settingsStore.js";
 import { MountService } from "./mountService.js";
+import { AdminService } from "./adminService.js";
 import { createLogger, requestLogger, type WebboxLogger } from "./logger.js";
 
 export interface CreateAppOptions extends Partial<WebboxConfig> {
@@ -55,7 +56,8 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
   });
   await library.ensureAll();
   const storage = library.getConfig();
-  const mounts = new MountService(conf, path.dirname(config.configFile ?? config.dataRoot));
+  const mounts = new MountService(conf, path.dirname(config.configFile ?? config.dataRoot), config.dataRoot);
+  await mounts.load();
   await mounts.ensureLocalRoots();
   const files = new FileService(storage.personal, config.dataRoot);
   const fileSpaces = {
@@ -70,9 +72,10 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
   const activity = new ActivityStore(path.join(config.dataRoot, "activity.json"));
   const notifications = new NotificationService(metadata);
   const safeBox = new SafeBoxService(metadata, storage.safeBox);
-  const workspace = new WorkspaceService(storage, safeBox, mounts.list());
+  const workspace = new WorkspaceService(storage, safeBox, mounts);
   const resolver = new PathResolver();
   const settings = new SettingsStore(config.dataRoot);
+  const admin = new AdminService(config.dataRoot, config.pluginRoot, library, settings, activity);
   const watcher = new WatchService([storage.personal, storage.photos, storage.documents, storage.music, storage.videos, storage.safeBox], logger, async (event) => {
     await notifications.add({ title: zhCN.server.logs.watcher, message: event.message, level: "info", targetPath: event.path });
   });
@@ -110,7 +113,7 @@ export async function createApp(overrides: CreateAppOptions = {}): Promise<Expre
     }));
   });
 
-  mountFileRoutes(app, files, logger, { activity, dataRoot: config.dataRoot, fileSpaces, library, metadata, mountFileSpaces, mounts, notifications, resolver, safeBox, settings, watcher, workspace });
+  mountFileRoutes(app, files, logger, { activity, admin, dataRoot: config.dataRoot, fileSpaces, library, metadata, mountFileSpaces, mounts, notifications, resolver, safeBox, settings, watcher, workspace });
   mountPluginRoutes(app, config.pluginRoot, metadata, logger);
 
   app.use(express.static(config.webDist, { fallthrough: true }));

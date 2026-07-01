@@ -174,3 +174,100 @@ export const zhCN = {
 } as const;
 
 export type WebboxLanguage = typeof zhCN;
+
+export const enUS: WebboxLanguage = {
+  ...zhCN,
+  app: { loadFailed: "Load failed", loading: "Loading" },
+  fileManager: {
+    ...zhCN.fileManager,
+    treeLabel: "Directory tree",
+    locations: "Locations",
+    favorites: "Favorites",
+    personalSpace: "Personal Space",
+    tools: "Tools",
+    recentDocuments: "Recent Documents",
+    photos: "Photos",
+    documents: "Documents",
+    music: "Music",
+    videos: "Videos",
+    safeBox: "Safe Box",
+    mounts: "Network Mounts",
+    recycleBin: "Recycle Bin",
+    refresh: "Refresh",
+    upload: "Upload",
+    newFile: "New File",
+    newFolder: "New Folder",
+    search: "Search",
+    name: "Name",
+    size: "Size",
+    type: "Type",
+    modifiedTime: "Modified",
+    emptyFolder: "This folder is empty",
+    emptyHint: "Drop files here or use the toolbar to manage files",
+    operationDone: "Operation completed"
+  },
+  bottomMenu: {
+    ...zhCN.bottomMenu,
+    notificationTitle: "Notifications",
+    openMenuTitle: "Open menu",
+    notifications: "Notifications",
+    menu: "Menu",
+    admin: "Admin",
+    plugins: "Plugins",
+    languages: "Language",
+    simplifiedChinese: "简体中文",
+    english: "English",
+    theme: "Theme",
+    themeSystem: "System",
+    themeLight: "Light",
+    themeDark: "Dark"
+  },
+  admin: {
+    ...zhCN.admin,
+    title: "Admin",
+    close: "Close",
+    tabs: {
+      overview: "Overview",
+      settings: "System Settings",
+      storage: "Storage",
+      plugins: "Plugins",
+      notice: "Notifications"
+    }
+  },
+  contextMenu: {
+    ...zhCN.contextMenu,
+    actions: {
+      ...zhCN.contextMenu.actions,
+      open: "Open",
+      download: "Download",
+      rename: "Rename",
+      copy: "Copy",
+      move: "Move",
+      recycle: "Move to Recycle Bin",
+      restore: "Restore",
+      deleteForever: "Delete Permanently",
+      archive: "Archive/Extract",
+      favorite: "Favorite",
+      unfavorite: "Unfavorite",
+      properties: "Properties"
+    }
+  },
+  inspector: {
+    ...zhCN.inspector,
+    title: "Info",
+    properties: "Properties",
+    memos: "Memos",
+    activity: "Activity",
+    description: "Description",
+    tags: "Tags",
+    save: "Save",
+    addMemo: "Add"
+  },
+  notifications: {
+    title: "Notifications",
+    empty: "No notifications",
+    markRead: "Mark Read",
+    clear: "Clear"
+  },
+  server: zhCN.server
+};

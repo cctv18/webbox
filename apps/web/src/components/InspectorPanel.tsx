@@ -1,9 +1,18 @@
 import { CheckCircle2, Edit3, FileCode2, Image, Link, Save, Smile, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import MarkdownIt from "markdown-it";
 import type { ActivityRecord, FileDetails, FileItem, MemoEntry, PathMetadata } from "@webbox/shared";
 import { client } from "../api/client";
 import { text } from "../i18n";
 import { formatBytesWithExact } from "../utils/format";
+
+const markdown = new MarkdownIt({ linkify: true, breaks: true });
+const defaultImageRule = markdown.renderer.rules.image;
+markdown.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const src = tokens[idx].attrGet("src") ?? "";
+  const rendered = defaultImageRule ? defaultImageRule(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+  return `<a href="${markdown.utils.escapeHtml(src)}" target="_blank" rel="noreferrer">${rendered}</a>`;
+};
 
 interface InspectorPanelProps {
   path: string;
@@ -186,78 +195,13 @@ export function InspectorPanel({ path, space, selectedItems = [] }: InspectorPan
       <footer className="inspector-tabs" role="tablist">
         {toast && <div className="inspector-toast" role="status"><CheckCircle2 size={16} />{toast}</div>}
         <button className={tab === "properties" ? "active" : ""} type="button" role="tab" aria-selected={tab === "properties"} onClick={() => setTab("properties")}>{text.inspector.properties}</button>
-        <button className={tab === "memos" ? "active" : ""} type="button" role="tab" aria-selected={tab === "memos"} disabled={multiSelected} onClick={() => setTab("memos")}>{text.inspector.memos}</button>
+        <button className={`${tab === "memos" ? "active " : ""}${multiSelected ? "disabled" : ""}`} type="button" role="tab" aria-selected={tab === "memos"} disabled={multiSelected} onClick={() => setTab("memos")}>{text.inspector.memos}</button>
         <button className={tab === "activity" ? "active" : ""} type="button" role="tab" aria-selected={tab === "activity"} onClick={() => setTab("activity")}>{text.inspector.activity}</button>
       </footer>
     </aside>
   );
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char] ?? char));
-}
-
 function renderMarkdown(value: string): string {
-  const codeBlocks: string[] = [];
-  const escaped = escapeHtml(value).replace(/```([\s\S]*?)```/g, (_match, code: string) => {
-    const index = codeBlocks.push(`<pre><code>${code.replace(/^\n|\n$/g, "")}</code></pre>`) - 1;
-    return `\u0000CODE${index}\u0000`;
-  });
-  const lines = escaped.split(/\r?\n/);
-  const html: string[] = [];
-  let listOpen = false;
-  const closeList = () => {
-    if (listOpen) {
-      html.push("</ul>");
-      listOpen = false;
-    }
-  };
-
-  for (const line of lines) {
-    if (!line.trim()) {
-      closeList();
-      html.push("");
-      continue;
-    }
-    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
-    if (heading) {
-      closeList();
-      const level = heading[1].length;
-      html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
-      continue;
-    }
-    const bullet = /^[-*+]\s+(.+)$/.exec(line);
-    if (bullet) {
-      if (!listOpen) {
-        html.push("<ul>");
-        listOpen = true;
-      }
-      html.push(`<li>${renderInlineMarkdown(bullet[1])}</li>`);
-      continue;
-    }
-    const quote = /^&gt;\s+(.+)$/.exec(line);
-    if (quote) {
-      closeList();
-      html.push(`<blockquote>${renderInlineMarkdown(quote[1])}</blockquote>`);
-      continue;
-    }
-    if (/^---+$/.test(line.trim())) {
-      closeList();
-      html.push("<hr />");
-      continue;
-    }
-    closeList();
-    html.push(`<p>${renderInlineMarkdown(line)}</p>`);
-  }
-  closeList();
-  return html.join("").replace(/\u0000CODE(\d+)\u0000/g, (_match, index: string) => codeBlocks[Number(index)] ?? "");
-}
-
-function renderInlineMarkdown(value: string): string {
-  return value
-    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer\"><img src=\"$2\" alt=\"$1\" /></a>")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, "<a href=\"$2\" target=\"_blank\" rel=\"noreferrer\">$1</a>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>");
+  return markdown.render(value);
 }

@@ -3,10 +3,12 @@ import type { BootstrapData } from "@webbox/shared";
 import { client } from "./api/client";
 import { FileManager } from "./components/FileManager";
 import { uiAssets } from "./assets";
-import { text } from "./i18n";
+import { applyTheme, setLanguage, text } from "./i18n";
 import "./styles.css";
 
 export function AppShell({ bootstrap }: { bootstrap: BootstrapData }) {
+  setLanguage(bootstrap.language === "en-US" ? "en-US" : "zh-CN");
+  applyTheme(bootstrap.theme === "dark" || bootstrap.theme === "light" ? bootstrap.theme : "system");
   return (
     <main className="app-shell" onContextMenu={(event) => event.preventDefault()}>
       <FileManager bootstrap={bootstrap} />

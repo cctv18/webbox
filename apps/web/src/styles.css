@@ -15,6 +15,39 @@ body {
   min-width: 320px;
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: #15191d;
+  color: #e8edf1;
+}
+
+html[data-theme="dark"] .file-manager,
+html[data-theme="dark"] .tree,
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .toolbar,
+html[data-theme="dark"] .file-list,
+html[data-theme="dark"] .file-surface,
+html[data-theme="dark"] .inspector-panel,
+html[data-theme="dark"] .admin-panel,
+html[data-theme="dark"] .bottom-popover,
+html[data-theme="dark"] .notification-panel,
+html[data-theme="dark"] .context-menu,
+html[data-theme="dark"] .mount-panel,
+html[data-theme="dark"] .mount-dialog {
+  background: #20262b;
+  color: #e8edf1;
+  border-color: #39454f;
+}
+
+html[data-theme="dark"] button,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: #242c32;
+  color: #e8edf1;
+  border-color: #485762;
+}
+
 input,
 textarea {
   user-select: text;
@@ -958,8 +991,20 @@ body,
 
 .sort-arrow {
   margin-left: 4px;
-  color: #1677c8;
-  font-size: 12px;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  vertical-align: middle;
+}
+
+.sort-arrow.asc {
+  border-bottom: 6px solid #1677c8;
+}
+
+.sort-arrow.desc {
+  border-top: 6px solid #1677c8;
 }
 
 .notification-panel {
@@ -972,7 +1017,9 @@ body,
 }
 
 .notification-panel button {
-  width: 100%;
+  width: auto;
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .toolbar {
@@ -1396,4 +1443,318 @@ body,
   color: #687986;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.notification-panel header button,
+.notification-item button {
+  min-width: auto;
+  width: fit-content;
+  justify-self: end;
+}
+
+.bottom-popover {
+  gap: 0;
+  padding: 4px 0;
+  border-radius: 2px;
+}
+
+.bottom-popover button,
+.sub-actions button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.sub-actions {
+  padding-left: 0;
+}
+
+.sub-actions button {
+  padding-left: 28px;
+}
+
+.inspector-tabs button:disabled,
+.inspector-tabs button.disabled {
+  color: #9aa7b0;
+  background: #edf1f3;
+  cursor: not-allowed;
+}
+
+.properties-tab {
+  grid-template-rows: auto auto minmax(120px, 1fr) auto;
+}
+
+.properties-tab label:nth-of-type(1) input {
+  height: 32px;
+}
+
+.properties-tab label:nth-of-type(2) {
+  min-height: 0;
+}
+
+.properties-tab label:nth-of-type(2) textarea {
+  height: 100%;
+  resize: none;
+}
+
+.properties-tab > button {
+  justify-self: end;
+  width: fit-content;
+}
+
+.memo-tab {
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 0;
+  overflow: auto;
+}
+
+.memo-tab > .memo-editor {
+  flex: 0 0 auto;
+}
+
+.memo-tab .memo-editor textarea {
+  min-height: 4.5em;
+  max-height: 40%;
+  resize: none;
+  overflow: auto;
+}
+
+.memo-tab > .memo-entry {
+  flex: 0 0 auto;
+}
+
+.activity-tab {
+  align-content: stretch;
+}
+
+.file-row > span,
+.file-row > button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-name-cell svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+
+.mount-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #d8e0e4;
+}
+
+.mount-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.mount-toolbar h2 {
+  margin: 0 auto 0 0;
+  font-size: 16px;
+}
+
+.mount-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+}
+
+.mount-card {
+  min-height: 116px;
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  border: 1px solid #d8e0e4;
+  background: #ffffff;
+  padding: 12px;
+  text-align: left;
+}
+
+.mount-card.add {
+  place-items: center;
+  text-align: center;
+  color: #376f9b;
+}
+
+.mount-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.mount-dialog {
+  width: min(560px, 92vw);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #cbd6dc;
+  background: #ffffff;
+}
+
+.mount-dialog header,
+.mount-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.mount-dialog h2 {
+  margin: 0 auto 0 0;
+  font-size: 16px;
+}
+
+.mount-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mount-form label,
+.admin-section label {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.mount-form input,
+.mount-form select,
+.admin-section input {
+  width: 100%;
+  border: 1px solid #cbd6dc;
+  padding: 7px 8px;
+  font: inherit;
+}
+
+.checkbox-row {
+  display: inline-flex !important;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.admin-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  min-height: 520px;
+}
+
+.admin-tree {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  padding: 8px 0;
+  border-right: 1px solid #edf1f3;
+}
+
+.admin-tree button {
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 9px 14px;
+}
+
+.admin-tree button.active {
+  background: #e8f3ff;
+  color: #1b5f95;
+}
+
+.admin-content {
+  min-width: 0;
+  overflow: auto;
+  padding: 12px 16px;
+}
+
+.admin-section {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-section h3 {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+
+.admin-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-cards article,
+.admin-list article {
+  border: 1px solid #edf1f3;
+  background: #f8fafb;
+  padding: 10px;
+}
+
+.admin-cards article {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-details {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0;
+}
+
+.admin-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-list {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.admin-list article {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-list article span:nth-child(1) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
 }

@@ -38,6 +38,10 @@ export interface WebboxSettings {
     frontendZip: boolean;
     backendZipSizeLimitMb: number;
   };
+  notifications?: {
+    enabled: boolean;
+    maxItems: number;
+  };
 }
 
 export interface ResolvedLocation {
@@ -184,6 +188,80 @@ export interface MountDefinition {
   root: string;
   enabled: boolean;
   username?: string;
+  host?: string;
+  port?: number;
+  mode?: "active" | "passive";
+  anonymous?: boolean;
+  encoding?: string;
+  https?: boolean;
+}
+
+export interface MountInput {
+  type: "ftp" | "webdav";
+  host: string;
+  port?: number;
+  name?: string;
+  username?: string;
+  password?: string;
+  mode?: "active" | "passive";
+  anonymous?: boolean;
+  encoding?: string;
+  https?: boolean;
+}
+
+export interface AdminOverview {
+  storage: {
+    totalBytes: number;
+    roots: Array<{ key: keyof AdminStorageConfig; path: string; bytes: number }>;
+    device: { totalBytes: number; freeBytes: number; usedBytes: number };
+  };
+  system: {
+    cpuUsagePercent: number;
+    memoryUsagePercent: number;
+  };
+  visits24h: {
+    uploadBytes: number;
+    downloadBytes: number;
+    fileCreateCount: number;
+    fileDownloadCount: number;
+    fileEditCount: number;
+    fileDeleteCount: number;
+  };
+  serverInfo: {
+    platform: string;
+    release: string;
+    arch: string;
+    hostname: string;
+    serverTime: string;
+    ip: string[];
+    uptimeSeconds: number;
+  };
+  clientInfo: {
+    accessTime: string;
+    ip: string;
+    userAgent: string;
+    language: string;
+  };
+}
+
+export interface BackupInclude {
+  settings: boolean;
+  data: Array<keyof AdminStorageConfig>;
+  plugins: boolean;
+}
+
+export interface BackupItem {
+  name: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface BackupSchedule {
+  id: string;
+  name: string;
+  cron: string;
+  include: BackupInclude;
+  createdAt: string;
 }
 
 export interface ExplorerEvent {

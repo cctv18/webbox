@@ -13,11 +13,13 @@
     "@webbox/plugin-compat": "workspace:*",
     "@webbox/shared": "workspace:*",
     "archiver": "^7.0.1",
+    "basic-ftp": "^5.0.5",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "mime-types": "^2.1.35",
     "multer": "^2.0.1",
-    "unzipper": "^0.12.3"
+    "unzipper": "^0.12.3",
+    "webdav": "^5.8.0"
   },
   "devDependencies": {
     "supertest": "^7.1.1"

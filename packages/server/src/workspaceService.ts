@@ -1,9 +1,14 @@
 import type { AdminStorageConfig, MountDefinition, TreeNode } from "@webbox/shared";
 import { zhCN } from "@webbox/shared";
 import type { SafeBoxService } from "./safeBoxService.js";
+import type { MountService } from "./mountService.js";
 
 export class WorkspaceService {
-  constructor(private readonly storage: AdminStorageConfig, private readonly safeBox: SafeBoxService, private readonly mounts: MountDefinition[] = []) {}
+  constructor(private readonly storage: AdminStorageConfig, private readonly safeBox: SafeBoxService, private readonly mounts: MountDefinition[] | MountService = []) {}
+
+  private mountList(): MountDefinition[] {
+    return Array.isArray(this.mounts) ? this.mounts : this.mounts.list();
+  }
 
   async tree(): Promise<TreeNode[]> {
     const safe = await this.safeBox.status();
@@ -56,7 +61,7 @@ export class WorkspaceService {
         path: "/网络挂载",
         icon: "computer",
         children: [
-          ...this.mounts.map((mount) => ({
+          ...this.mountList().map((mount) => ({
             id: `mount-${mount.id}`,
             label: mount.name,
             section: "mounts" as const,

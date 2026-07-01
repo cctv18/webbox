@@ -135,10 +135,10 @@ describe("Webbox UI", () => {
     render(<AppShell bootstrap={bootstrap} />);
     expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.menu }));
-    expect(screen.getByRole("button", { name: text.bottomMenu.admin })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: text.bottomMenu.plugins })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: text.bottomMenu.languages })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: text.bottomMenu.theme })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /后台管理|Admin/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /插件管理|Plugins/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /多语言|Language/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /主题样式|Theme/ })).toBeInTheDocument();
   });
 
   it("does not render removed admin sections", async () => {
@@ -249,9 +249,9 @@ describe("Webbox UI", () => {
     fireEvent.click(first);
     fireEvent.click(second, { ctrlKey: true });
     expect(screen.getByRole("tab", { name: text.inspector.memos })).toBeDisabled();
-    expect(screen.getByRole("columnheader", { name: /名称.*↑/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /名称/ })).toHaveAttribute("aria-sort", "ascending");
     fireEvent.click(screen.getByRole("columnheader", { name: /大小/ }));
-    expect(screen.getByRole("columnheader", { name: /大小.*↑/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /大小/ })).toHaveAttribute("aria-sort", "ascending");
   });
 
   it("opens a folder context menu on empty file surface", async () => {
@@ -263,5 +263,69 @@ describe("Webbox UI", () => {
     expect(menu.getByRole("button", { name: text.fileManager.newFolder })).toBeInTheDocument();
     expect(menu.getByRole("button", { name: text.fileManager.newFile })).toBeInTheDocument();
     expect(menu.getByRole("button", { name: text.contextMenu.actions.properties })).toBeInTheDocument();
+  });
+
+  it("uses markdown-it compatible preview output and dims the disabled memo tab", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/files?")) {
+        return { json: async () => ({ ok: true, data: [
+          { name: "a.txt", path: "/位置/个人空间/a.txt", kind: "file", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", extension: "txt" },
+          { name: "b.txt", path: "/位置/个人空间/b.txt", kind: "file", size: 2, modifiedAt: "2026-01-02T00:00:00.000Z", extension: "txt" }
+        ] }) };
+      }
+      return { json: async () => ({ ok: true, data: [] }) };
+    }));
+    render(<AppShell bootstrap={bootstrap} />);
+    fireEvent.click(await screen.findByRole("row", { name: /a\.txt/ }));
+    fireEvent.click(screen.getByRole("row", { name: /b\.txt/ }), { ctrlKey: true });
+    expect(screen.getByRole("tab", { name: text.inspector.memos })).toHaveClass("disabled");
+  });
+
+  it("opens an independent network mount panel with an add mount dialog", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/settings")) {
+        return { json: async () => ({ ok: true, data: {
+          explorer: { theme: "light", language: "zh-CN", viewMode: "list", iconSize: 72, sort: { key: "name", direction: "asc" }, searchHistoryLimit: 10, currentPath: "/位置/个人空间", expandedTreeIds: ["mounts"], historyBack: [], historyForward: [] },
+          upload: { chunkSizeMb: 8, concurrency: 3, ignorePatterns: [], retryCount: 2 },
+          download: { speedLimitKb: 0, frontendZip: true, backendZipSizeLimitMb: 1024 }
+        } }) };
+      }
+      if (url.includes("/api/mounts") && init?.method === "POST") {
+        return { json: async () => ({ ok: true, data: { id: "dav-example", type: "webdav", name: "dav.example.test", root: "https://dav.example.test:443", enabled: true } }) };
+      }
+      if (url.includes("/api/mounts")) {
+        return { json: async () => ({ ok: true, data: [] }) };
+      }
+      return { json: async () => ({ ok: true, data: [] }) };
+    }));
+    render(<AppShell bootstrap={{ ...bootstrap, tree: [
+      { id: "mounts", label: "网络挂载", section: "mounts", kind: "virtual", path: "/网络挂载", icon: "computer", children: [
+        { id: "mount-add", label: "新增网络挂载", section: "mounts", kind: "virtual", path: "/网络挂载/新增网络挂载", icon: "computer" }
+      ] }
+    ] }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "网络挂载" }));
+    expect(screen.getByRole("heading", { name: "网络挂载" })).toBeInTheDocument();
+    const addMountButtons = screen.getAllByRole("button", { name: "新增网络挂载" });
+    expect(addMountButtons.length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(addMountButtons[addMountButtons.length - 1]);
+    expect(screen.getByRole("dialog", { name: "新增网络挂载" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "WebDAV" }));
+    fireEvent.change(screen.getByLabelText("服务器地址"), { target: { value: "dav.example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/mounts", expect.objectContaining({ method: "POST" })));
+  });
+
+  it("saves language and theme choices through backend settings", async () => {
+    render(<AppShell bootstrap={bootstrap} />);
+    expect(await screen.findByText(text.fileManager.emptyFolder)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.menu }));
+    fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.languages }));
+    fireEvent.click(screen.getByRole("button", { name: text.bottomMenu.english }));
+    fireEvent.click(screen.getByRole("button", { name: /主题样式|Theme/ }));
+    fireEvent.click(screen.getByRole("button", { name: /深色|Dark/ }));
+    expect(fetch).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ method: "PUT" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
 });

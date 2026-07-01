@@ -14,7 +14,7 @@ import type {
   RecycleRecord,
   SafeBoxStatus,
   TreeNode
-  , WebboxSettings, TemplateFileType, FavoriteEntry, RecentSearch
+  , WebboxSettings, TemplateFileType, FavoriteEntry, RecentSearch, AdminOverview, BackupInclude, BackupItem, BackupSchedule, MountDefinition, MountInput
 } from "@webbox/shared";
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -87,6 +87,21 @@ export const client = {
     body.append("file", file);
     return api<MemoUpload>("/api/metadata/attachments", { method: "POST", body });
   },
+  adminOverview: () => api<AdminOverview>("/api/admin/overview"),
+  adminSettings: () => api<WebboxSettings>("/api/admin/settings"),
+  saveAdminSettings: (settings: Partial<WebboxSettings>) => api<WebboxSettings>("/api/admin/settings", { method: "PUT", body: JSON.stringify(settings) }),
+  backups: () => api<{ items: BackupItem[]; schedules: BackupSchedule[] }>("/api/admin/backups"),
+  createBackup: (name: string, include: Partial<BackupInclude>) => api<BackupItem>("/api/admin/backups", { method: "POST", body: JSON.stringify({ name, include }) }),
+  restoreBackup: (name: string) => api<{ restored: string }>("/api/admin/backups/restore", { method: "POST", body: JSON.stringify({ name }) }),
+  deleteBackups: (names: string[]) => api<{ deleted: string[] }>("/api/admin/backups", { method: "DELETE", body: JSON.stringify({ names }) }),
+  addBackupSchedule: (schedule: { name: string; cron: string; include: BackupInclude }) => api<BackupSchedule>("/api/admin/backups/schedules", { method: "POST", body: JSON.stringify(schedule) }),
+  deleteBackupSchedule: (id: string) => api<{ id: string }>(`/api/admin/backups/schedules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  adminLogs: (query = "range=today") => api<{ items: ActivityRecord[] }>(`/api/admin/logs?${query}`),
+  adminLogsExportUrl: (query = "range=today") => `/api/admin/logs/export?${query}`,
+  mounts: () => api<MountDefinition[]>("/api/mounts"),
+  addMount: (input: MountInput) => api<MountDefinition>("/api/mounts", { method: "POST", body: JSON.stringify(input) }),
+  renameMount: (id: string, name: string) => api<MountDefinition>(`/api/mounts/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ name }) }),
+  deleteMount: (id: string) => api<{ id: string }>(`/api/mounts/${encodeURIComponent(id)}`, { method: "DELETE" }),
   storage: () => api<AdminStorageConfig>("/api/admin/storage"),
   saveStorage: (config: Partial<AdminStorageConfig>) => api<AdminStorageConfig>("/api/admin/storage", { method: "POST", body: JSON.stringify(config) })
 };

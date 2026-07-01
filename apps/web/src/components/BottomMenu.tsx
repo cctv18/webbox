@@ -11,9 +11,11 @@ interface BottomMenuProps {
   notifications?: NotificationItem[];
   onNotificationRead?: (id: string) => void;
   onNotificationClear?: () => void;
+  onLanguage?: (language: "zh-CN" | "en-US") => void;
+  onTheme?: (theme: "light" | "dark" | "system") => void;
 }
 
-export function BottomMenu({ onAdmin, onPlugins, notifications = [], onNotificationRead, onNotificationClear }: BottomMenuProps) {
+export function BottomMenu({ onAdmin, onPlugins, notifications = [], onNotificationRead, onNotificationClear, onLanguage, onTheme }: BottomMenuProps) {
   const [open, setOpen] = useState(false);
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
@@ -41,9 +43,9 @@ export function BottomMenu({ onAdmin, onPlugins, notifications = [], onNotificat
           <button type="button" onClick={onAdmin}><Settings size={16} />{text.bottomMenu.admin}</button>
           <button type="button" onClick={onPlugins}><Plug size={16} />{text.bottomMenu.plugins}</button>
           <button type="button" onClick={() => setLanguageOpen((value) => !value)}><Languages size={16} />{text.bottomMenu.languages}</button>
-          {languageOpen && <div className="sub-actions"><button type="button">{text.bottomMenu.simplifiedChinese}</button><button type="button">{text.bottomMenu.english}</button></div>}
+          {languageOpen && <div className="sub-actions"><button type="button" onClick={() => onLanguage?.("zh-CN")}>{text.bottomMenu.simplifiedChinese}</button><button type="button" onClick={() => onLanguage?.("en-US")}>{text.bottomMenu.english}</button></div>}
           <button type="button" onClick={() => setThemeOpen((value) => !value)}><Palette size={16} />{text.bottomMenu.theme}</button>
-          {themeOpen && <div className="sub-actions"><button type="button">{text.bottomMenu.themeSystem}</button><button type="button">{text.bottomMenu.themeLight}</button><button type="button">{text.bottomMenu.themeDark}</button></div>}
+          {themeOpen && <div className="sub-actions"><button type="button" onClick={() => onTheme?.("system")}>{text.bottomMenu.themeSystem}</button><button type="button" onClick={() => onTheme?.("light")}>{text.bottomMenu.themeLight}</button><button type="button" onClick={() => onTheme?.("dark")}>{text.bottomMenu.themeDark}</button></div>}
         </div>
       )}
       {noticeOpen && <NotificationPanel items={notifications} onMarkRead={(id) => onNotificationRead?.(id)} onClear={() => onNotificationClear?.()} />}

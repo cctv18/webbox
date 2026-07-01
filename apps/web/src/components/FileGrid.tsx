@@ -238,7 +238,7 @@ function SortHeader({ sort, sortKey, label, onSort }: { sort: SortState; sortKey
   const active = sort.key === sortKey;
   return (
     <button type="button" role="columnheader" aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"} onClick={() => onSort(sortKey)}>
-      {label}{active && <span className="sort-arrow">{sort.direction === "asc" ? "↑" : "↓"}</span>}
+      {label}{active && <span className={`sort-arrow ${sort.direction}`} aria-hidden="true" />}
     </button>
   );
 }

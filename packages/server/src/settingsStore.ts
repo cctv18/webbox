@@ -25,6 +25,10 @@ export const defaultSettings: WebboxSettings = {
     speedLimitKb: 0,
     frontendZip: true,
     backendZipSizeLimitMb: 1024
+  },
+  notifications: {
+    enabled: true,
+    maxItems: 100
   }
 };
 
@@ -32,7 +36,8 @@ function mergeSettings(current: WebboxSettings, patch: Partial<WebboxSettings>):
   return {
     explorer: { ...current.explorer, ...(patch.explorer ?? {}), sort: { ...current.explorer.sort, ...(patch.explorer?.sort ?? {}) } },
     upload: { ...current.upload, ...(patch.upload ?? {}) },
-    download: { ...current.download, ...(patch.download ?? {}) }
+    download: { ...current.download, ...(patch.download ?? {}) },
+    notifications: { ...(current.notifications ?? defaultSettings.notifications), ...(patch.notifications ?? {}) }
   };
 }
 

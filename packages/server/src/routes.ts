@@ -6,6 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import mime from "mime-types";
 import { fail, ok, zhCN, type AdminStorageConfig, type FavoriteEntry, type FileItem, type MemoUpload, type PathMetadata, type RecentSearch, type TemplateFileType } from "@webbox/shared";
 import type { ActivityStore } from "./activityStore.js";
+import type { AdminService } from "./adminService.js";
 import { FileService } from "./fileService.js";
 import type { LibraryService } from "./libraryService.js";
 import type { WebboxLogger } from "./logger.js";
@@ -22,6 +23,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 export interface RouteServices {
   activity?: ActivityStore;
+  admin?: AdminService;
   dataRoot?: string;
   fileSpaces?: Record<string, FileService>;
   library?: LibraryService;
@@ -41,6 +43,7 @@ function routeError(error: unknown) {
   if (message === "PATH_OUTSIDE_ROOT") return fail("PATH_OUTSIDE_ROOT", zhCN.server.errors.pathOutsideRoot);
   if (message === "INVALID_NAME") return fail("INVALID_INPUT", zhCN.server.errors.invalidName);
   if (message === "INVALID_INPUT" || message === "INVALID_PATH") return fail("INVALID_INPUT", zhCN.server.errors.invalidInput);
+  if (message === "UNSUPPORTED_OPERATION") return fail("UNSUPPORTED_OPERATION", zhCN.server.errors.operationFailed);
   if (message === "PATH_NOT_FOUND" || message.includes("ENOENT")) return fail("PATH_NOT_FOUND", zhCN.server.errors.pathNotFound);
   if (message.includes("EEXIST")) return fail("DUPLICATE_NAME", zhCN.server.errors.duplicateName);
   if (message.includes("EACCES") || message.includes("EPERM") || message.includes("EROFS")) return fail("FILESYSTEM_DENIED", zhCN.server.errors.createFailed);
@@ -79,6 +82,7 @@ interface FileTarget {
   isAbstract: boolean;
   virtual?: string;
   space?: string;
+  mountId?: string;
 }
 
 function resolvedPath(value: string, services: RouteServices): FileTarget {
@@ -89,6 +93,9 @@ function resolvedPath(value: string, services: RouteServices): FileTarget {
   if (resolved.kind === "recycle") return { path: resolved.displayPath, displayPath: resolved.displayPath, isAbstract: true, virtual: "recycle" };
   if (resolved.kind === "mount") {
     const service = services.mountFileSpaces?.[resolved.mountId ?? ""];
+    if (!service && services.mounts?.isRemote(resolved.mountId ?? "")) {
+      return { path: resolved.filePath ?? "/", displayPath: resolved.displayPath, isAbstract: true, mountId: resolved.mountId };
+    }
     if (!service) throw new Error("INVALID_PATH");
     return { path: resolved.filePath ?? "/", displayPath: resolved.displayPath, isAbstract: true, service };
   }
@@ -298,6 +305,10 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
         res.json(ok(await listVirtual(target.virtual, files, services)));
         return;
       }
+      if (target.mountId && services.mounts?.isRemote(target.mountId)) {
+        res.json(ok(await addFavoriteFlags(await services.mounts.listRemote(target.mountId, target.path), services)));
+        return;
+      }
       if (target.space === "safe") await services.safeBox?.assertUnlocked();
       res.json(ok(await listConcrete(requireService(target), services)));
     } catch (error) {
@@ -357,8 +368,31 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     try {
       const target = await requireConcreteTarget(req, files, services, filePath);
       await target.service.rename(target.path, name);
+      const nextDisplayPath = joinDisplayPath(path.posix.dirname(filePath), name);
+      await services.metadata?.update((state) => {
+        for (const memo of state.memos) {
+          if (memo.path === filePath) memo.path = nextDisplayPath;
+          else if (memo.path.startsWith(`${filePath}/`)) memo.path = `${nextDisplayPath}${memo.path.slice(filePath.length)}`;
+        }
+        for (const draft of Object.values(state.memoDrafts)) {
+          if (draft.path === filePath) draft.path = nextDisplayPath;
+          else if (draft.path.startsWith(`${filePath}/`)) draft.path = `${nextDisplayPath}${draft.path.slice(filePath.length)}`;
+        }
+        for (const [metadataPath, metadata] of Object.entries({ ...state.pathMetadata })) {
+          if (metadataPath === filePath || metadataPath.startsWith(`${filePath}/`)) {
+            const nextPath = metadataPath === filePath ? nextDisplayPath : `${nextDisplayPath}${metadataPath.slice(filePath.length)}`;
+            delete state.pathMetadata[metadataPath];
+            state.pathMetadata[nextPath] = { ...metadata, path: nextPath };
+          }
+        }
+        for (const favorite of state.favorites) {
+          if (favorite.path === filePath) favorite.path = nextDisplayPath;
+          else if (favorite.path.startsWith(`${filePath}/`)) favorite.path = `${nextDisplayPath}${favorite.path.slice(filePath.length)}`;
+        }
+        state.favoritePaths = state.favorites.map((favorite) => favorite.path);
+      });
       await record(services, "file.rename", filePath, "重命名文件");
-      res.json(ok({ path: req.body.path, name: req.body.name }));
+      res.json(ok({ path: nextDisplayPath, name: req.body.name }));
     } catch (error) {
       logFailure(logger, "file.rename", error, { path: filePath, name });
       res.status(400).json(routeError(error));
@@ -499,7 +533,7 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
       if (!req.file) throw new Error("INVALID_INPUT");
       const target = await requireConcreteTarget(req, files, services, dir);
       await target.service.writeBuffer(path.posix.join(target.path, req.file.originalname), req.file.buffer);
-      await record(services, "file.upload", path.posix.join(dir.replace(/\\/g, "/"), req.file.originalname), "上传文件");
+      await services.activity?.append({ action: "file.upload", path: path.posix.join(dir.replace(/\\/g, "/"), req.file.originalname), message: "上传文件", details: { bytes: req.file.size } });
       await services.notifications?.add({ title: zhCN.fileManager.uploadDone, message: req.file.originalname, level: "success", targetPath: dir });
       res.json(ok({ name: req.file.originalname }));
     } catch (error) {
@@ -514,6 +548,10 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
     try {
       const target = await requireConcreteTarget(req, files, services, filePath);
       const absolute = target.service.getAbsolutePath(target.path);
+      const stat = await fs.stat(absolute);
+      if (services.activity && stat.isFile()) {
+        await services.activity.append({ action: "file.download", path: filePath, message: "下载文件", details: { bytes: stat.size } });
+      }
       res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(absolute))}`);
       res.sendFile(absolute);
     } catch (error) {
@@ -863,6 +901,148 @@ export function mountFileRoutes(app: Express, files: FileService, logger: Webbox
       state.memos = state.memos.filter((memo) => memo.id !== id);
     });
     res.json(ok({ id }));
+  });
+
+  app.get("/api/admin/overview", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.overview({ ip: req.ip, headers: req.headers })));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.get("/api/admin/settings", async (_req, res) => {
+    res.json(ok(await services.settings?.get()));
+  });
+
+  app.put("/api/admin/settings", async (req, res) => {
+    try {
+      res.json(ok(await services.admin?.updateSettings(req.body)));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.get("/api/admin/backups", async (_req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.listBackups()));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.post("/api/admin/backups", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.createBackup(req.body)));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.post("/api/admin/backups/restore", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.restoreBackup(String(req.body.name ?? ""))));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.delete("/api/admin/backups", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      const names = Array.isArray(req.body.names) ? req.body.names.map(String) : [];
+      res.json(ok(await services.admin.deleteBackups(names)));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.post("/api/admin/backups/schedules", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.addSchedule(req.body)));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.delete("/api/admin/backups/schedules/:id", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.deleteSchedule(req.params.id)));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.get("/api/admin/logs", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      res.json(ok(await services.admin.logs({
+        range: typeof req.query.range === "string" ? req.query.range : undefined,
+        from: typeof req.query.from === "string" ? req.query.from : undefined,
+        to: typeof req.query.to === "string" ? req.query.to : undefined
+      })));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.get("/api/admin/logs/export", async (req, res) => {
+    try {
+      if (!services.admin) throw new Error("PATH_NOT_FOUND");
+      const logs = await services.admin.logs({
+        range: typeof req.query.range === "string" ? req.query.range : undefined,
+        from: typeof req.query.from === "string" ? req.query.from : undefined,
+        to: typeof req.query.to === "string" ? req.query.to : undefined
+      });
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=\"operation-logs.csv\"");
+      res.send(`\uFEFF${services.admin.exportLogs(logs.items)}`);
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.get("/api/mounts", async (_req, res) => {
+    res.json(ok(services.mounts?.list() ?? []));
+  });
+
+  app.post("/api/mounts", async (req, res) => {
+    try {
+      if (!services.mounts) throw new Error("PATH_NOT_FOUND");
+      const result = await services.mounts.add(req.body);
+      await services.activity?.append({ action: "system.mount.add", path: `/网络挂载/${result.id}`, message: "新增网络挂载" });
+      res.json(ok(result));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.put("/api/mounts/:id", async (req, res) => {
+    try {
+      if (!services.mounts) throw new Error("PATH_NOT_FOUND");
+      const result = await services.mounts.update(req.params.id, req.body);
+      await services.activity?.append({ action: "system.mount.update", path: `/网络挂载/${result.id}`, message: "修改网络挂载" });
+      res.json(ok(result));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
+  });
+
+  app.delete("/api/mounts/:id", async (req, res) => {
+    try {
+      if (!services.mounts) throw new Error("PATH_NOT_FOUND");
+      const result = await services.mounts.remove(req.params.id);
+      await services.activity?.append({ action: "system.mount.delete", path: `/网络挂载/${result.id}`, message: "删除网络挂载" });
+      res.json(ok(result));
+    } catch (error) {
+      res.status(400).json(routeError(error));
+    }
   });
 
   app.get("/api/admin/storage", async (_req, res) => {
